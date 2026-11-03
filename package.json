@@ -1,0 +1,20 @@
+{
+  "name": "lantern-night-3d",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Look test: Lantern Night's characters and village in 3D, as paper cutouts and as soft toys",
+  "type": "module",
+  "scripts": {
+    "dev": "esbuild src/main.ts --bundle --format=esm --sourcemap --outfile=public/main.js --servedir=public --serve=8123 --watch=forever",
+    "build": "esbuild src/main.ts --bundle --format=esm --minify --outfile=public/main.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.187.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2"
+  }
+}

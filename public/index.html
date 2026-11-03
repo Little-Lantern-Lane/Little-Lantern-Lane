@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lantern Night 3D look test</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <h1>Lantern Night in 3D</h1>
+    <div class="seg" id="styleBox" role="group" aria-label="Style">
+      <button data-v="both">Side by side</button><button data-v="paper">Paper</button><button data-v="toy">Toy</button>
+    </div>
+    <div class="seg" id="viewBox" role="group" aria-label="View">
+      <button data-v="cast">Characters</button><button data-v="village">Village</button>
+    </div>
+    <div class="seg" id="lightBox" role="group" aria-label="Time of day">
+      <button data-v="evening">Evening</button><button data-v="day">Day</button>
+    </div>
+    <label id="feelingBox">Feeling <select id="feeling"></select></label>
+    <span id="help"></span>
+  </header>
+  <main id="panels"></main>
+  <script type="module" src="main.js"></script>
+</body>
+</html>
