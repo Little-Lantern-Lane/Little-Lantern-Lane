@@ -2,19 +2,25 @@
   "name": "lantern-night-3d",
   "version": "0.0.1",
   "private": true,
-  "description": "Look test: Lantern Night's characters and village in 3D, as paper cutouts and as soft toys",
+  "description": "Lantern Night in 3D: a browser game about DBT skills",
   "type": "module",
   "scripts": {
-    "dev": "esbuild src/main.ts --bundle --format=esm --sourcemap --outfile=public/main.js --servedir=public --serve=8123 --watch=forever",
-    "build": "esbuild src/main.ts --bundle --format=esm --minify --outfile=public/main.js",
-    "typecheck": "tsc --noEmit"
+    "ink": "inkjs-compiler -o public/festival.json story/festival.ink",
+    "bundle": "esbuild src/main.ts --bundle --format=esm --minify --sourcemap --outfile=public/main.js",
+    "build": "npm run ink && npm run bundle",
+    "dev": "npm run ink && esbuild src/main.ts --bundle --format=esm --sourcemap --outfile=public/main.js --servedir=public --serve=8140 --watch=forever",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
+    "inkjs": "^2.4.0",
     "three": "^0.187.0"
   },
   "devDependencies": {
+    "@types/node": "^26.6.6",
     "@types/three": "^0.187.0",
     "esbuild": "^0.28.2",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
   }
 }

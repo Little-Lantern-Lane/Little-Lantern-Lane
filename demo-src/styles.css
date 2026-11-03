@@ -1,0 +1,18 @@
+:root { --ink: #33241c; --bg: #f3e9d6; --line: #d9c7a6; --on: #33241c; --on-ink: #fdf6e6; }
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { display: flex; flex-direction: column; background: var(--bg); color: var(--ink); font: 15px/1.3 ui-rounded, "Segoe UI", system-ui, sans-serif; }
+header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 10px 16px; }
+h1 { font-size: 17px; margin: 0 6px 0 0; }
+.seg { display: inline-flex; border: 1.5px solid var(--line); border-radius: 10px; overflow: hidden; }
+.seg button { border: 0; background: transparent; color: inherit; font: inherit; padding: 6px 11px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--on); color: var(--on-ink); }
+.seg button:focus-visible, select:focus-visible { outline: 2px solid #c8582e; outline-offset: -2px; }
+select { font: inherit; color: inherit; padding: 5px 6px; border: 1.5px solid var(--line); border-radius: 10px; background: #fdf6e6; }
+#help { margin-left: auto; opacity: .75; }
+#panels { flex: 1; min-height: 0; display: grid; gap: 8px; padding: 0 8px 8px; }
+#panels[data-count="2"] { grid-template-columns: 1fr 1fr; }
+.panel { position: relative; min-width: 0; min-height: 0; border-radius: 12px; overflow: hidden; }
+.panel canvas { position: absolute; inset: 0; display: block; touch-action: none; }
+.panel h2 { position: absolute; z-index: 1; top: 10px; left: 12px; margin: 0; padding: 3px 10px; font-size: 13px; border-radius: 8px; background: #fdf6e6e6; pointer-events: none; }
+@media (max-width: 760px) { #panels[data-count="2"] { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; } #help { display: none; } }

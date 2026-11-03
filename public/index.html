@@ -2,26 +2,73 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Lantern Night 3D look test</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#120f1c">
+  <title>Lantern Night</title>
+  <meta name="description" content="A short walkable adventure about a lantern festival, a fall, and what you do next.">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header>
-    <h1>Lantern Night in 3D</h1>
-    <div class="seg" id="styleBox" role="group" aria-label="Style">
-      <button data-v="both">Side by side</button><button data-v="paper">Paper</button><button data-v="toy">Toy</button>
+  <div id="stage">
+    <div id="game"></div>
+
+    <div id="hud"></div>
+
+    <aside id="meter" aria-label="How you feel">
+      <div class="bar" role="img">
+        <div class="ends"><span>Feeling bad</span><span>Feeling good</span></div>
+        <div class="track feel"><span class="dot feeling"></span></div>
+      </div>
+      <div class="bar" role="img">
+        <div class="ends"><span>Want to hide</span><span>Be with people</span></div>
+        <div class="track pull"><span class="dot pull"></span></div>
+      </div>
+      <div class="curve">
+        <svg viewBox="0 0 200 60" preserveAspectRatio="none" aria-hidden="true">
+          <polyline class="curve-line" points=""/>
+        </svg>
+      </div>
+    </aside>
+
+    <div id="dialogue" hidden aria-live="polite"></div>
+    <div id="panel" hidden></div>
+
+    <div id="rotate" aria-live="polite"><p>Turn your phone sideways to play.</p></div>
+
+    <div id="title">
+      <div class="title-card">
+        <p class="eyebrow">A small adventure in six chapters</p>
+        <h1>Lantern Night</h1>
+        <p class="lede">Tonight the whole village lights its lanterns at once, and you promised to bring them. Walk the village, talk to your neighbors, and get the lanterns lit.</p>
+        <ul class="how key-only">
+          <li>Arrow keys or <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> to walk, or click where to go</li>
+          <li><kbd>E</kbd> or <kbd>Space</kbd> to talk, use things and go through doors</li>
+          <li><kbd>Space</kbd> or click to read on; number keys pick answers</li>
+        </ul>
+        <ul class="how touch-only">
+          <li>Tap where you want to go</li>
+          <li>Tap a person or thing to walk over and talk or use it, or tap the button in the corner</li>
+          <li>Tap the text to read on</li>
+        </ul>
+        <div id="continue-row" class="continue-row" hidden>
+          <button id="continue" class="primary">Continue</button>
+          <span class="saved-at"></span>
+          <button id="start-over" class="link-btn">Start over (delete the save)</button>
+        </div>
+        <div class="title-actions">
+          <button id="start-main" class="primary">Begin</button>
+          <button id="start-promise" class="ghost">Play the borrowed-lantern story</button>
+        </div>
+        <p class="chapters">Change <button id="edit-look" class="link-btn">how you look</button> · <button id="edit-home" class="link-btn">your home</button></p>
+        <p class="chapters">Or jump to a chapter: <button id="start-ch2" class="link-btn">2. The morning after</button> · <button id="start-ch3" class="link-btn">3. The storm</button> · <button id="start-ch4" class="link-btn">4. Opening day</button> · <button id="start-ch5" class="link-btn">5. The first snow</button> · <button id="start-ch6" class="link-btn">6. The tide</button></p>
+        <p class="small">There are no right or wrong choices. What you do changes the village, and the village can always recover. Six chapters, about an hour, with sound.</p>
+        <p class="small fine">A game about skills from DBT (dialectical behavior therapy). It is not therapy and not a crisis resource. If you are in danger or thinking about hurting yourself, contact local emergency services (in the US, call or text 988).</p>
+      </div>
     </div>
-    <div class="seg" id="viewBox" role="group" aria-label="View">
-      <button data-v="cast">Characters</button><button data-v="village">Village</button>
-    </div>
-    <div class="seg" id="lightBox" role="group" aria-label="Time of day">
-      <button data-v="evening">Evening</button><button data-v="day">Day</button>
-    </div>
-    <label id="feelingBox">Feeling <select id="feeling"></select></label>
-    <span id="help"></span>
-  </header>
-  <main id="panels"></main>
+  </div>
+
   <script type="module" src="main.js"></script>
 </body>
 </html>
