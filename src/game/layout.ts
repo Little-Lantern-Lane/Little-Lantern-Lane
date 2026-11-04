@@ -100,13 +100,30 @@ export const USABLES: Record<string, { x: number; label: string }> = {
   shed: { x: 12850, label: "the shed" },
 };
 
-/** Doors between places. `when` limits a door to the chapters it's used in. */
-export const DOORS: { x: number; to: number; label: string; when?: (w: WorldState) => boolean }[] = [
-  { x: 1650, to: 5210, label: "the workshop" },
-  { x: 5170, to: 1650, label: "Market Street" },
-  // Chapter five: during the night you can step in and out; the story takes you in and out at dusk and dawn.
-  { x: HOME_DOOR, to: 6510, label: "your house", when: (w) => w.level === 5 && w.time === "night" },
-  { x: 6470, to: HOME_DOOR + 50, label: "Lantern Lane", when: (w) => w.level === 5 && w.time === "night" },
+/** The snowy night in chapter five, when the story keeps you going in and out. */
+const snowNight = (w: WorldState) => w.level === 5 && w.time === "night";
+
+/**
+ * Your front door opens from the street whenever you're free to walk the village. Not while the
+ * pull to hide is on or you're in your shell: those are the game's own moments, and a door out of
+ * them would skip them. At dusk and dawn in chapter five the story takes you through it.
+ */
+export function canEnterHome(w: WorldState): boolean {
+  if (snowNight(w)) return true;
+  return w.level <= 3 && w.form === "person" && !w.pull && !laneBlocked(w);
+}
+
+/** Wider than the way in, so nothing can shut you inside. */
+export function canLeaveHome(w: WorldState): boolean {
+  return snowNight(w) || w.level <= 3;
+}
+
+/** Doors between places. `when` limits a door to when it can be used; `toZ` is where you land across the path. */
+export const DOORS: { x: number; to: number; toZ?: number; label: string; when?: (w: WorldState) => boolean }[] = [
+  { x: 1650, to: 5210, label: "Go into the workshop" },
+  { x: 5170, to: 1650, label: "Go out to Market Street" },
+  { x: HOME_DOOR, to: 6510, toZ: -1.4, label: "Go into your house", when: canEnterHome },
+  { x: 6470, to: HOME_DOOR, toZ: -3.1, label: "Go out to Lantern Lane", when: canLeaveHome },
 ];
 
 export const FOUNTAIN_X = 2550;

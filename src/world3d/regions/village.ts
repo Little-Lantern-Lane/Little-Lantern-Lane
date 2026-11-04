@@ -410,6 +410,13 @@ export function buildVillage(ctx: BuildContext): VillageKit {
   textSign(laneSign, "LANTERN LANE", 0, 2.25, 0, 2.4, 0.42);
   lamppost(p, 19.15, 0, -3);
   block(19.15, -3, 0.3);
+  // The way to your own door: stepping stones up from the lane, and a sign so you can find it.
+  const doorX = X(HOME_DOOR);
+  for (const [dx, z, w] of [[0.1, -3, 0.95], [-0.14, -3.45, 0.85], [0.08, -3.9, 0.9]] as const) p.add(pbox(w, 0.08, 0.42, 0.04, soft("#e6d6b8"), doorX + dx, 0.04, z));
+  const homeSign = p.sub(doorX - 1.75, 0, -3.3);
+  homeSign.add(pipe(0.07, 0.09, 1.9, soft("#7c5a42"), 0, 0.95, -0.06));
+  textSign(homeSign, "HOME", 0, 1.75, 0, 1.15, 0.42);
+  block(doorX - 1.75, -3.3, 0.14);
 
   // Hedges and pots along the house fronts.
   s.bush(2.9, 0, -3.7, 0.72, GREENS[0], ["#f4b9c0", "#fbe08a", "#f4b9c0"]);

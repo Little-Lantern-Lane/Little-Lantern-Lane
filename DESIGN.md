@@ -148,6 +148,14 @@ Something to keep coming back to, without a currency or a shop.
   could go later.
 - Choices are saved in their own browser save (`lantern-night:looks`), so starting over keeps them.
 
+**Going inside (3D, 2026-11-03).** A HOME sign and stepping stones mark your house on Lantern Lane, and the lane
+widens into a short path up to the door. The door opens from the street in chapters one to three and on the snowy
+night in chapter five; it stays shut during the pull to hide, in the shell, and when the lane is too dark to reach.
+The way out is always open whenever the way in was. The room takes your home's wall, door and roof colours (walls,
+door, curtains). An upper floor adds stairs and a garden adds flowers to the view; a side room and porch only show
+outside. The window shows the lane's time and weather, and the stove is lit except before the story lights it in
+chapter five.
+
 ## Open decisions
 - Audience: clinical adjunct (with therapist) vs. general wellness product.
   Affects evidence needs, content review, crisis handling, business model.

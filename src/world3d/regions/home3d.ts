@@ -19,7 +19,7 @@ interface Grow {
   garden: boolean;
 }
 
-interface Colours {
+export interface Colours {
   wall: string;
   roof: string;
   trim: string;
@@ -373,12 +373,17 @@ function garden(p: Parts, x0: number): void {
 }
 
 /** A home from what the player chose, with snow on it if `snow`. See the top of this file for its origin. */
+/** The colours of a home, whichever way it was chosen. */
+export function homeColours(home: HomeChoice): Colours {
+  return home.kind === "custom"
+    ? { wall: home.custom.wall, roof: home.custom.roofColor, trim: home.custom.trim, door: home.custom.doorColor }
+    : PAINTS[home.paint];
+}
+
 export function buildHome(home: HomeChoice, snow: boolean): THREE.Group {
   const p = new Parts();
   const g: Grow = { up: hasAddition(home, "up"), side: hasAddition(home, "side"), porch: hasAddition(home, "porch"), garden: hasAddition(home, "garden") };
-  const c: Colours = home.kind === "custom"
-    ? { wall: home.custom.wall, roof: home.custom.roofColor, trim: home.custom.trim, door: home.custom.doorColor }
-    : PAINTS[home.paint];
+  const c = homeColours(home);
   if (home.kind === "custom") custom(p, home.custom, g);
   else if (home.style === "mushroom") mushroom(p, g, c);
   else if (home.style === "burrow") burrow(p, g, c);

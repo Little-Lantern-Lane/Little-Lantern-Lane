@@ -18,7 +18,7 @@ import {
 import { makeFigure } from "./figure";
 import { ball, cyl, glowing, lantern, LANTERN_COLOURS, own, soft } from "./kit";
 import { buildCoast } from "./regions/coast";
-import { buildHouse } from "./regions/house";
+import { buildHouse, type HouseKit } from "./regions/house";
 import { buildMill } from "./regions/mill";
 import { buildVillage, VILLAGE_Z } from "./regions/village";
 import { buildWorkshop } from "./regions/workshop";
@@ -99,8 +99,8 @@ function darknessOf(w: WorldState, region: Region["id"]): number {
   const festival = w.time === "night" && w.lanterns === "hung" && w.level <= 3;
   let a = w.time === "night" ? (festival ? 0.72 - w.squareLight * 0.2 + (w.weather === "storm" ? 0.1 : 0) : 0.8) : w.form === "shell" ? 0.35 : w.time === "sunset" ? 0.2 : 0;
   if (w.level === 4 && w.time === "night") a = 0.5;
-  if (region === "home" && w.time === "night") a = 0.72;
-  if (region === "home" && w.time === "sunset") a = 0.3;
+  // The power cut in chapter five; any other evening the house is lit and the stove's going.
+  if (region === "home") a = w.level !== 5 ? (w.time === "night" ? 0.25 : 0) : w.time === "night" ? 0.72 : w.time === "sunset" ? 0.3 : a;
   if (region === "coast" && w.time === "sunset") a = 0.22;
   return a;
 }
@@ -146,6 +146,7 @@ export class World3D {
   private lamps: THREE.PointLight[] = [];
   private carriedLight = new THREE.PointLight("#ffbe78", 0, 11, 1.6);
   private kits: Record<Region["id"], RegionKit>;
+  private house: HouseKit;
   private village: ReturnType<typeof buildVillage>;
   private coast: ReturnType<typeof buildCoast>;
 
@@ -264,8 +265,9 @@ export class World3D {
 
     // Every place is built once; only the one you're in is shown.
     this.village = buildVillage({ home });
+    this.house = buildHouse(home);
     this.coast = buildCoast();
-    this.kits = { village: this.village, workshop: buildWorkshop(), home: buildHouse(), mill: buildMill(), coast: this.coast };
+    this.kits = { village: this.village, workshop: buildWorkshop(), home: this.house, mill: buildMill(), coast: this.coast };
     for (const k of Object.values(this.kits)) {
       k.group.visible = false;
       this.scene.add(k.group);
@@ -555,6 +557,8 @@ export class World3D {
 
   refreshHome(home: HomeChoice): Promise<void> {
     this.village.refreshHome(home);
+    this.house.refreshHome(home);
+    this.house.setState(this.world);
     return Promise.resolve();
   }
 
@@ -996,6 +1000,7 @@ export class World3D {
     let vz = 0;
     if (left || right || up || down) {
       this.moveTo = null;
+      this.pendingAction = null;
       vx = (right ? 1 : 0) - (left ? 1 : 0);
       vz = (down ? 1 : 0) - (up ? 1 : 0);
       const n = Math.hypot(vx, vz) || 1;
@@ -1088,7 +1093,7 @@ export class World3D {
     const t = this.nearestTarget();
     if (t) return this.showPrompt(at(t.x, t.z), t.label, () => this.interact());
     const door = this.nearestDoor();
-    if (door) return this.showPrompt(at(door.x, bandAt(door.x)[0]), `Go into ${door.label}`, () => this.interact());
+    if (door) return this.showPrompt(at(door.x, bandAt(door.x)[0]), door.label, () => this.interact());
     this.hidePrompt();
   }
 
@@ -1123,14 +1128,19 @@ export class World3D {
     const t = this.nearestTarget();
     if (t) return this.pick(t.choice);
     const door = this.nearestDoor();
-    if (door) {
+    if (!door) return;
+    // Walk up to it, then through.
+    this.moveTo = { x: door.x, z: bandAt(door.x)[0], since: this.time - 7.5 };
+    this.pendingAction = () => {
       this.hooks.sound.play("door");
       this.fade.classList.add("on");
       setTimeout(() => {
-        this.teleport(door.to);
+        this.teleport(door.to, door.toZ);
+        // Stepping out of your own door isn't walking up to it: the story waits until you do.
+        for (const id of Object.keys(ZONES)) if (this.inZone(id)) this.insideZones.add(id);
         this.fade.classList.remove("on");
       }, 200);
-    }
+    };
   }
 
   private pick(choice: StoryChoice) {
@@ -1180,10 +1190,10 @@ export class World3D {
     this.lightClock = 0;
   }
 
-  private teleport(x: number) {
+  private teleport(x: number, z?: number) {
     this.px = x;
     const [back, front] = bandAt(x);
-    this.pz = THREE.MathUtils.clamp(x >= ZONES.hollow.x0 && x < ZONES.hollow.x1 ? VILLAGE_Z.hollow : 0.6, back, front);
+    this.pz = THREE.MathUtils.clamp(z ?? (x >= ZONES.hollow.x0 && x < ZONES.hollow.x1 ? VILLAGE_Z.hollow : 0.6), back, front);
     this.moveTo = null;
     const region = regionAt(x);
     this.kits[region.id].group.visible = true;

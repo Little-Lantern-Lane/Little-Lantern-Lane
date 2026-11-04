@@ -1,14 +1,18 @@
 // Inside your house on Lantern Lane: the stove, the kitchen corner, the rug, the music box,
 // the big window, the craft table and the bookshelf, left to right as in the story.
+// The walls, door and curtains take the colours of the home you chose, an upper floor adds stairs,
+// and the window shows the lane as it is right now.
 
 import * as THREE from "three";
 import { PROPS, USABLES } from "../../game/layout";
+import { hasAddition, type HomeChoice } from "../../logic/appearance";
 import type { WorldState } from "../../logic/world";
 import {
   ball, BLOCK, boardCanvas, cyl, drift, flat, flame, flicker, many, noShadow, own, paint, paintPlanks, rbox, room, seeded, soft, steam, surround, teacup, wallDoor, type Piece,
 } from "../kit";
 import { regionZ, worldX as X } from "../space";
 import type { Blocker, LightSpot, RegionKit } from "../types";
+import { homeColours, type Colours } from "./home3d";
 
 const WOOD = "#9b6b43";
 const WOOD_DARK = "#7a5340";
@@ -19,18 +23,22 @@ const H = 9;
 const TOP = 1.3; // table and counter height
 const PX = 40;
 
-function wallTexture(w: number) {
-  return paint(w * PX, H * PX, (c) => {
-    paintPlanks(c, 0, 0, w * PX, H * PX, ["#ebcb9f", "#e6c496", "#efd2a8"], 46, "#d9b285");
-    // A darker panelled wainscot along the bottom.
+const shade = (c: string, to: string, by: number) => `#${new THREE.Color(c).lerp(new THREE.Color(to), by).getHexString()}`;
+
+/** Planks in your home's wall colour, warmed a little by the room, over a panelled wainscot in its trim. */
+function wallTexture(w: number, c: Colours) {
+  const wall = shade(c.wall, "#e8c49a", 0.3);
+  const panel = shade(c.trim, wall, 0.45);
+  return paint(w * PX, H * PX, (g) => {
+    paintPlanks(g, 0, 0, w * PX, H * PX, [wall, shade(wall, "#b08a60", 0.06), shade(wall, "#ffffff", 0.12)], 46, shade(wall, "#a07850", 0.2));
     const top = H * PX - 1.9 * PX;
-    c.fillStyle = "#c99a6c";
-    c.fillRect(0, top, w * PX, 1.9 * PX);
-    c.fillStyle = "#d4a87a";
+    g.fillStyle = panel;
+    g.fillRect(0, top, w * PX, 1.9 * PX);
+    g.fillStyle = shade(panel, "#ffffff", 0.14);
     for (let x = 6; x < w * PX; x += 72) {
-      c.beginPath();
-      c.roundRect(x, top + 10, 60, 1.9 * PX - 20, 8);
-      c.fill();
+      g.beginPath();
+      g.roundRect(x, top + 10, 60, 1.9 * PX - 20, 8);
+      g.fill();
     }
   });
 }
@@ -50,26 +58,55 @@ function hearthTiles() {
   });
 }
 
-/** What's outside: snowy roofs across the lane and a lit window or two. */
-function outsideTexture() {
-  return paint(430, 340, (c) => {
-    const sky = c.createLinearGradient(0, 0, 0, 340);
-    sky.addColorStop(0, "#2f3866");
-    sky.addColorStop(1, "#7f8fc0");
-    c.fillStyle = sky;
-    c.fillRect(0, 0, 430, 340);
-    c.fillStyle = "#4a5488";
-    c.beginPath();
-    c.moveTo(0, 250);
-    c.lineTo(90, 170);
-    c.lineTo(200, 250);
-    c.lineTo(240, 225);
-    c.lineTo(310, 160);
-    c.lineTo(385, 225);
-    c.lineTo(430, 215);
-    c.lineTo(430, 340);
-    c.lineTo(0, 340);
-    c.fill();
+interface View {
+  sky: [string, string];
+  roofs: string;
+  ground: string;
+  lit: boolean;
+  snow: boolean;
+  rain: boolean;
+  flowers: boolean;
+}
+
+/** What the lane looks like through the glass at this moment. */
+function viewOf(ws: WorldState, garden: boolean): View {
+  const snow = ws.weather === "snow";
+  const rain = ws.weather === "storm";
+  const time = ws.time;
+  const sky: [string, string] = rain ? ["#1b2236", "#4a5468"]
+    : snow ? (time === "morning" ? ["#9fb8dc", "#fbe2d0"] : time === "sunset" ? ["#44508e", "#f6c6a2"] : ["#2f3866", "#7f8fc0"])
+    : time === "night" ? ["#0e1336", "#3a3468"] : time === "sunset" ? ["#2b3a78", "#f6ad7c"] : time === "morning" ? ["#a8c6e0", "#f8e6cf"] : ["#8cc4e8", "#f4ecd2"];
+  const dark = rain || time === "night" || time === "sunset";
+  return {
+    sky,
+    roofs: snow ? "#4a5488" : dark ? "#4b4470" : "#c9745c",
+    ground: snow ? "#fbfdff" : dark ? "#3f5a58" : "#a9d88a",
+    lit: dark,
+    snow,
+    rain,
+    flowers: garden && !snow,
+  };
+}
+
+function drawOutside(c: CanvasRenderingContext2D, v: View) {
+  const sky = c.createLinearGradient(0, 0, 0, 340);
+  sky.addColorStop(0, v.sky[0]);
+  sky.addColorStop(1, v.sky[1]);
+  c.fillStyle = sky;
+  c.fillRect(0, 0, 430, 340);
+  c.fillStyle = v.roofs;
+  c.beginPath();
+  c.moveTo(0, 250);
+  c.lineTo(90, 170);
+  c.lineTo(200, 250);
+  c.lineTo(240, 225);
+  c.lineTo(310, 160);
+  c.lineTo(385, 225);
+  c.lineTo(430, 215);
+  c.lineTo(430, 340);
+  c.lineTo(0, 340);
+  c.fill();
+  if (v.snow) {
     c.strokeStyle = "#fbfdff";
     c.lineWidth = 11;
     c.lineCap = "round";
@@ -82,18 +119,42 @@ function outsideTexture() {
     c.lineTo(310, 160);
     c.lineTo(385, 223);
     c.stroke();
-    c.fillStyle = "#ffd98a";
-    c.fillRect(74, 258, 26, 28);
-    c.fillRect(296, 236, 22, 24);
-    c.fillStyle = "#fbfdff";
-    c.beginPath();
-    c.moveTo(0, 340);
-    c.lineTo(0, 300);
-    c.quadraticCurveTo(80, 280, 150, 296);
-    c.quadraticCurveTo(240, 316, 310, 288);
-    c.quadraticCurveTo(380, 272, 430, 300);
-    c.lineTo(430, 340);
-    c.fill();
+  }
+  c.fillStyle = v.lit ? "#ffd98a" : "#bfe3ef";
+  c.fillRect(74, 258, 26, 28);
+  c.fillRect(296, 236, 22, 24);
+  c.fillStyle = v.ground;
+  c.beginPath();
+  c.moveTo(0, 340);
+  c.lineTo(0, 300);
+  c.quadraticCurveTo(80, 280, 150, 296);
+  c.quadraticCurveTo(240, 316, 310, 288);
+  c.quadraticCurveTo(380, 272, 430, 300);
+  c.lineTo(430, 340);
+  c.fill();
+  if (v.flowers) {
+    const r = seeded(31);
+    for (let i = 0; i < 26; i++) {
+      c.fillStyle = ["#f08a6a", "#f6d36a", "#e98fb4", "#fffaf0"][i % 4];
+      c.beginPath();
+      c.arc(r() * 430, 312 + r() * 26, 5 + r() * 3, 0, 7);
+      c.fill();
+    }
+  }
+  if (v.rain) {
+    c.strokeStyle = "rgba(200,215,240,.5)";
+    c.lineWidth = 2;
+    const r = seeded(19);
+    for (let i = 0; i < 70; i++) {
+      const x = r() * 450;
+      const y = r() * 340;
+      c.beginPath();
+      c.moveTo(x, y);
+      c.lineTo(x - 7, y + 24);
+      c.stroke();
+    }
+  }
+  if (v.snow) {
     // Frost in the corners.
     c.fillStyle = "rgba(255,255,255,.45)";
     for (const [x, y, sx, sy] of [[0, 0, 1, 1], [430, 0, -1, 1], [0, 340, 1, -1], [430, 340, -1, -1]]) {
@@ -103,7 +164,7 @@ function outsideTexture() {
       c.quadraticCurveTo(x + sx * 34, y + sy * 30, x, y + sy * 76);
       c.fill();
     }
-  });
+  }
 }
 
 function fallingSnow() {
@@ -191,7 +252,32 @@ function sleepyMouse(): THREE.Group {
   return g;
 }
 
-export function buildHouse(): RegionKit {
+/** Stairs up the back wall to the floor you added, rising to the left and out of sight. */
+function stairs(foot: number): THREE.Group {
+  const g = new THREE.Group();
+  const steps = 13;
+  const run = 0.27;
+  const rise = 0.62;
+  for (let i = 0; i < steps; i++) {
+    const x = foot - i * run;
+    const y = (i + 1) * rise;
+    g.add(rbox(run + 0.08, 0.14, 1, 0.04, soft(WOOD_LIGHT), x, y, BACK + 0.6));
+    g.add(rbox(run, y - 0.07, 0.9, 0.03, soft(WOOD), x, (y - 0.07) / 2, BACK + 0.58));
+    if (i % 2 === 0) g.add(cyl(0.035, 0.035, 1.3, soft(WOOD_DARK), x, y + 0.7, BACK + 1.04, 8));
+  }
+  const len = Math.hypot(run * (steps - 1), rise * (steps - 1));
+  const rail = rbox(len + 0.4, 0.1, 0.1, 0.04, soft(WOOD_DARK), foot - (run * (steps - 1)) / 2, rise * (steps + 1) / 2 + 1.3, BACK + 1.04);
+  rail.rotation.z = -Math.atan2(rise, run);
+  g.add(rail);
+  return g;
+}
+
+export interface HouseKit extends RegionKit {
+  /** Repaint the room after your home changes. */
+  refreshHome(home: HomeChoice): void;
+}
+
+export function buildHouse(home: HomeChoice): HouseKit {
   const Z = regionZ(7000);
   const group = new THREE.Group();
   const g = new THREE.Group();
@@ -206,17 +292,20 @@ export function buildHouse(): RegionKit {
   const mid = (x0 + x1) / 2;
   const w = x1 - x0;
   g.add(surround(x0, x1, BACK));
-  g.add(room({ x0, x1, back: BACK, front: FRONT, height: H, wall: wallTexture(w), side: "#d9b285", floor: boardCanvas(w, FRONT - BACK, ["#c98a5e", "#c48458", "#cf9064"], "#a8744e"), lip: WOOD_DARK }));
+  const shell = room({ x0, x1, back: BACK, front: FRONT, height: H, wall: wallTexture(w, homeColours(home)), side: "#d9b285", floor: boardCanvas(w, FRONT - BACK, ["#c98a5e", "#c48458", "#cf9064"], "#a8744e"), lip: WOOD_DARK });
+  g.add(shell);
+  const wallMat = (shell.children[0] as THREE.Mesh).material as THREE.MeshStandardMaterial;
+  const sideWalls = shell.children.slice(-2) as THREE.Mesh[];
   g.add(noShadow(rbox(w, 0.16, 0.14, 0.06, soft(WOOD), mid, 1.96, BACK + 0.07)), noShadow(rbox(w, 0.5, 0.44, 0.12, soft(WOOD_DARK), mid, 7.2, BACK + 0.22)));
   for (const bx of [X(6950), X(7570)]) g.add(noShadow(rbox(0.4, 7, 0.24, 0.08, soft(WOOD), bx, 3.5, BACK + 0.12)));
 
   // The front door, with its mat and a little snow blown in.
   const dx = X(6470);
-  const door = wallDoor(1.9, 3.2, "#a8674a");
-  door.position.set(dx, 0, BACK);
-  g.add(door);
+  const yours = new THREE.Group(); // the parts that follow your home: rebuilt when it changes
+  g.add(yours);
   g.add(rbox(0.7, 0.55, 0.05, 0.05, soft("#bfe3ef", 0.3), dx, 2.5, BACK + 0.27));
-  g.add(rbox(1.8, 0.08, 0.9, 0.04, soft("#8fae6a"), dx, 0.05, BACK + 1), ball(0.34, soft("#fbfdff"), dx - 0.5, 0.05, BACK + 0.8, 0.28));
+  const blownIn = ball(0.34, soft("#fbfdff"), dx - 0.5, 0.05, BACK + 0.8, 0.28);
+  g.add(rbox(1.8, 0.08, 0.9, 0.04, soft("#8fae6a"), dx, 0.05, BACK + 1), blownIn);
 
   // Coat hooks with a scarf and your satchel, and a basket of logs below.
   const hx = X(6545);
@@ -365,7 +454,8 @@ export function buildHouse(): RegionKit {
   const ww = 3.9;
   const wh = 3.1;
   g.add(rbox(ww + 0.5, wh + 0.5, 0.2, 0.14, soft(WOOD), wx, wy, BACK + 0.1));
-  const outside = flat(outsideTexture(), ww, wh, wx, wy, BACK + 0.22);
+  const viewPaint = paint(430, 340, () => {});
+  const outside = flat(viewPaint, ww, wh, wx, wy, BACK + 0.22);
   const view = outside.material as THREE.MeshStandardMaterial;
   view.emissive.set("#ffffff");
   view.emissiveMap = view.map;
@@ -379,10 +469,12 @@ export function buildHouse(): RegionKit {
   g.add(rbox(0.14, wh, 0.1, 0.04, bar, wx, wy, BACK + 0.28), rbox(ww, 0.14, 0.1, 0.04, bar, wx, wy, BACK + 0.28));
   g.add(rbox(ww + 1, 0.18, 0.5, 0.07, soft(WOOD_LIGHT), wx, wy - wh / 2 - 0.3, BACK + 0.26));
   g.add(rbox(ww + 1.6, 0.11, 0.11, 0.05, soft(WOOD_DARK), wx, wy + wh / 2 + 0.5, BACK + 0.4));
+  const curtains: THREE.Mesh[] = [];
   const curtain = soft("#e98f9a");
   for (const d of [-1, 1]) {
     for (let i = 0; i < 3; i++) {
       const c = cyl(0.17, 0.2, wh + 0.8, curtain, wx + d * (ww / 2 + 0.2 + i * 0.26), wy + 0.06, BACK + 0.42 - (i % 2) * 0.08, 10);
+      curtains.push(c);
       g.add(c);
     }
     g.add(rbox(0.86, 0.14, 0.5, 0.06, soft("#f6d36a"), wx + d * (ww / 2 + 0.44), wy - 0.3, BACK + 0.42));
@@ -443,8 +535,12 @@ export function buildHouse(): RegionKit {
   g.add(many(BLOCK, books));
 
   // A candle-warm light from the room itself, so it never feels empty, even with the stove out.
+  // Only chapter five starts with the stove cold; the story lights it.
+  const stoveLit = (ws: WorldState) => ws.level !== 5 || ws.props.includes("stove_fire");
   const lights: LightSpot[] = [
-    { pos: [sx, 1.6, Z + BACK + 2.4], color: "#ffa45e", power: 40, on: (ws) => ws.props.includes("stove_fire") },
+    // The stove carries the room through the power cut; by day it's only a warm corner.
+    { pos: [sx, 1.6, Z + BACK + 2.4], color: "#ffa45e", power: 40, on: (ws) => stoveLit(ws) && (ws.level === 5 || ws.time === "night") },
+    { pos: [sx, 1.6, Z + BACK + 2.4], color: "#ffa45e", power: 12, on: (ws) => stoveLit(ws) && ws.level !== 5 && ws.time !== "night" },
     { pos: [tx - 0.62, 2.3, Z + BACK + 1.5], color: "#ffc27a", power: 16, on: (ws) => ws.props.includes("candles") },
     { pos: [mid - 3, 5.2, Z + 0.6], color: "#ffdcb0", power: 16, on: () => true },
     { pos: [mid + 6, 5.2, Z + 0.6], color: "#ffdcb0", power: 16, on: () => true },
@@ -462,15 +558,54 @@ export function buildHouse(): RegionKit {
     ...cushions.map(([x]) => ({ X: x, Z: Z + 1.55, r: 0.4 })),
   ];
 
+  // Your home's colours, and what it has grown.
+  const stairFoot = X(7040);
+  const stairBlockers: Blocker[] = [-0.5, -1.7, -2.9].map((d) => ({ X: stairFoot + d, Z: Z + BACK + 0.5, r: 0.62 }));
+  let garden = false;
+  const refreshHome = (h: HomeChoice) => {
+    const c = homeColours(h);
+    yours.traverse((o) => (o as THREE.Mesh).geometry?.dispose());
+    yours.clear();
+    const door = wallDoor(1.9, 3.2, c.door);
+    door.position.set(dx, 0, BACK);
+    yours.add(door);
+    wallMat.map?.dispose();
+    wallMat.map = wallTexture(w, c);
+    wallMat.needsUpdate = true;
+    for (const m of sideWalls) m.material = soft(shade(shade(c.wall, "#e8c49a", 0.3), "#8a6a48", 0.14));
+    for (const m of curtains) m.material = soft(c.roof);
+    garden = hasAddition(h, "garden");
+    for (const b of stairBlockers) if (blockers.includes(b)) blockers.splice(blockers.indexOf(b), 1);
+    if (hasAddition(h, "up")) {
+      yours.add(stairs(stairFoot));
+      blockers.push(...stairBlockers);
+    }
+    viewKey = "";
+  };
+
+  let viewKey = "";
+  refreshHome(home);
+
   return {
     group,
     lights,
     blockers,
+    refreshHome,
     setState(ws: WorldState) {
       for (const [name, o] of Object.entries(props)) o.visible = ws.props.includes(name);
-      kettleSteam.visible = ws.props.includes("stove_fire");
-      // Dawn on the last morning: the glass goes pale.
-      view.emissiveIntensity = ws.time === "morning" ? 1.2 : 0.65;
+      const lit = stoveLit(ws);
+      fire.visible = lit;
+      kettleSteam.visible = lit;
+      blownIn.visible = ws.weather === "snow";
+      const v = viewOf(ws, garden);
+      const key = JSON.stringify(v);
+      if (key !== viewKey) {
+        viewKey = key;
+        drawOutside((viewPaint.image as HTMLCanvasElement).getContext("2d")!, v);
+        viewPaint.needsUpdate = true;
+      }
+      // Dawn on the last morning: the glass goes pale. Daylight outside reads brighter than the room.
+      view.emissiveIntensity = ws.time === "morning" || (ws.time === "afternoon" && ws.weather === "clear") ? 1.1 : 0.65;
       falling.visible = ws.weather === "snow";
     },
     update(dt: number, t: number) {

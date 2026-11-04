@@ -138,3 +138,8 @@ before playtesting with real players. Each points to where it lives.
 - **How distress looks in 3D.** Colours drain and darkness closes in around the player, and in the memory
   scenes villagers turn, raise an arm toward the player and take on a red tint. The rules are unchanged, but
   this looks different from 2D. Does it read as a feeling, and not as judgment? (`src/world3d/World.ts`)
+- **Your house as somewhere to go.** In chapters one to three you can now walk into your warm house at any time,
+  with nothing gained or lost by doing so. The door stays shut during the pull to hide and in the shell, so it
+  can't skip those moments. But the story is about avoiding and approaching, and a cosy room with no cost could
+  read as a place to hide. Is that a concern, or is a safe place to rest fine as long as the story still waits
+  outside? (`canEnterHome` in `src/game/layout.ts`)
