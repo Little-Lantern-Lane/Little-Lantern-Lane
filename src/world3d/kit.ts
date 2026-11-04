@@ -277,8 +277,9 @@ export function wallDoor(w: number, h: number, color: string, frame = "#7a5340")
 export function flame(s = 1): THREE.Group {
   const g = new THREE.Group();
   g.scale.setScalar(s);
-  for (const [r, y, c, p] of [[0.3, 0.42, "#e9583c", 1.6], [0.2, 0.34, "#f2b54a", 2], [0.11, 0.24, "#fde6a8", 2.4]] as const) {
-    const b = ball(r, glowing(c, p), 0, y, r * 0.3, 1.7);
+  for (const [r, y, c] of [[0.3, 0.42, "#e9583c"], [0.2, 0.34, "#f2b54a"], [0.11, 0.24, "#fde6a8"]] as const) {
+    // Unlit, and each layer sits in front of the last so all three colours show.
+    const b = ball(r, new THREE.MeshBasicMaterial({ color: c, toneMapped: false }), 0, y, (0.3 - r) * 1.3 + 0.1, 1.7);
     b.castShadow = false;
     g.add(b);
   }

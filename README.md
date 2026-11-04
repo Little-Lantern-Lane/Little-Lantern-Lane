@@ -1,26 +1,29 @@
-# Lantern Night in 3D: look test
+# Lantern Night in 3D
 
-A throwaway test of how Lantern Night could look in 3D in the browser. It shows the full cast and
-a small stretch of Lantern Lane in two styles, side by side:
+A browser game that teaches skills from DBT (dialectical behavior therapy) through a story set in a
+small village of soft toy animals. This is the 3D version; the 2D game in the DBT-game repo is the backup.
 
-- **Paper cutout:** the game's own character drawings, die-cut with a bare paper border, on card
-  with real thickness. Scenery is cut card and folded paper houses.
-- **Soft 3D toy:** the same characters built from rounded felt shapes, using the same character
-  data. Their faces are the game's face drawings wrapped over the head, so all eleven feelings work.
-
-Everything is generated in code: no image, model or audio files.
+It is not therapy and not a crisis resource.
 
 ## Run it
 
     npm install
     npm run dev
 
-Then open http://localhost:8123. Use the buttons to switch style, view, time of day and feeling.
-Drag the Characters view to turn everyone round. Walk in the Village view with the arrow keys or WASD.
+Then open http://localhost:8140. Tests: `npm test`. Types: `npm run typecheck`.
 
-## How it relates to the game
+## How it is built
 
-The live game is in the separate DBT-game repo and is not touched by this one. `src/cast.ts` and
-`src/plush.ts` are copies from it; `plush.ts` gains options to draw flat, or only the face or the
-feeling's sign. There is no story, dialogue or save system here, and no tests, because this code
-is for judging the look and is not meant to be kept as it stands.
+| Part | Where | What it does |
+| --- | --- | --- |
+| Story | `story/` | All dialogue and branching, written by hand in Ink |
+| Rules | `src/logic/` | The feeling meters, world state and outcomes. Pure and tested |
+| Layout | `src/game/layout.ts` | Where everything is, as one position along the path |
+| 3D world | `src/world3d/` | Movement, camera, light, weather and the challenges (`World.ts`), the characters (`figure.ts`) and each place (`regions/`) |
+| Overlays | `src/ui/` | Dialogue, panels, wardrobe and home screens |
+| Sound | `src/audio/` | Generated with Web Audio |
+
+`src/world3d/space.ts` turns a story position into a real spot in 3D, so the story and rules never
+needed to change. All art is generated in code and all sound is synthesized: there are no asset files.
+
+The character look test lives in `demo-src/` and is published at `/look/`.

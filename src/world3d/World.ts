@@ -70,11 +70,11 @@ interface Sky {
 const SKY: Record<string, Sky> = {
   afternoon: { top: "#8cc4e8", mid: "#bfe0ee", low: "#f4ecd2", hemi: "#fff6e6", ground: "#b8a98c", hemiI: 2.1, sun: "#fff1d8", sunI: 2.4, fog: "#d6e6e6" },
   sunset: { top: "#2b3a78", mid: "#8a64a0", low: "#f6ad7c", hemi: "#c6c6f0", ground: "#8d6f72", hemiI: 1.9, sun: "#ffb987", sunI: 1.6, fog: "#7d6aa6" },
-  night: { top: "#0e1336", mid: "#1c2452", low: "#3a3468", hemi: "#8f9be0", ground: "#3a3350", hemiI: 1.5, sun: "#a9b8f0", sunI: 0.75, fog: "#1c2452" },
+  night: { top: "#0e1336", mid: "#1c2452", low: "#3a3468", hemi: "#8f98d0", ground: "#4a4260", hemiI: 1.25, sun: "#aab6e4", sunI: 0.45, fog: "#1c2452" },
   morning: { top: "#a8c6e0", mid: "#dfe3e6", low: "#f8e6cf", hemi: "#f4f0ec", ground: "#a79f90", hemiI: 1.9, sun: "#ffe6c8", sunI: 1.8, fog: "#dfe3e6" },
-  storm: { top: "#1b2236", mid: "#2f3a52", low: "#4a5468", hemi: "#8f9db8", ground: "#39404e", hemiI: 1.4, sun: "#9fb0cc", sunI: 0.6, fog: "#2f3a52" },
+  storm: { top: "#1b2236", mid: "#2f3a52", low: "#4a5468", hemi: "#b0b8c8", ground: "#565c68", hemiI: 1.7, sun: "#b8c4d8", sunI: 0.7, fog: "#2f3a52" },
   "winter-sunset": { top: "#44508e", mid: "#a68bb6", low: "#f6c6a2", hemi: "#d8d8f4", ground: "#a79fb8", hemiI: 2, sun: "#ffc8a0", sunI: 1.5, fog: "#a68bb6" },
-  "winter-night": { top: "#0e1436", mid: "#1f2a58", low: "#3f4a7a", hemi: "#a2b0ea", ground: "#5a6390", hemiI: 1.6, sun: "#b8c8f4", sunI: 0.8, fog: "#1f2a58" },
+  "winter-night": { top: "#0e1436", mid: "#1f2a58", low: "#3f4a7a", hemi: "#bcc4e4", ground: "#5a6390", hemiI: 1.6, sun: "#b8c8f4", sunI: 0.8, fog: "#1f2a58" },
   "winter-dawn": { top: "#9fb8dc", mid: "#e4dee8", low: "#fbe2d0", hemi: "#f4f0f6", ground: "#c8c8d8", hemiI: 2, sun: "#ffdcc0", sunI: 1.8, fog: "#e4dee8" },
   coast: { top: "#7cc0e4", mid: "#c4e6ee", low: "#f6efd8", hemi: "#fff8ec", ground: "#b8b09a", hemiI: 2.1, sun: "#fff4dc", sunI: 2.4, fog: "#cfe6ea" },
   "coast-dusk": { top: "#34447e", mid: "#a06c98", low: "#f8b078", hemi: "#ccc8ee", ground: "#8f7a78", hemiI: 1.9, sun: "#ffb080", sunI: 1.5, fog: "#a06c98" },
@@ -142,6 +142,7 @@ export class World3D {
   private camera = new THREE.PerspectiveCamera(30, 16 / 9, 0.5, 400);
   private hemi = new THREE.HemisphereLight();
   private sun = new THREE.DirectionalLight();
+  private fill = new THREE.DirectionalLight("#ffe8d0", 0);
   private lamps: THREE.PointLight[] = [];
   private carriedLight = new THREE.PointLight("#ffbe78", 0, 11, 1.6);
   private kits: Record<Region["id"], RegionKit>;
@@ -247,7 +248,7 @@ export class World3D {
     this.scene.background = this.skyTexture;
     this.scene.fog = new THREE.Fog("#d6e6e6", 44, 130);
 
-    this.scene.add(this.hemi, this.sun, this.sun.target, this.carriedLight);
+    this.scene.add(this.hemi, this.sun, this.sun.target, this.fill, this.fill.target, this.carriedLight);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
     this.sun.shadow.bias = -0.0006;
@@ -444,7 +445,7 @@ export class World3D {
     this.hookLanterns.forEach((l, i) => {
       if (!this.hanging) l.g.visible = l.shown = w.lanterns === "hung" && i >= w.lanternsLost;
       const lit = night && i < w.lanternsHung && w.lanterns === "hung" && i >= w.lanternsLost;
-      l.lit = lit ? (i === BRIGHTEST ? 2.4 : 1.2) : 0;
+      l.lit = lit ? (i === BRIGHTEST ? 0.6 : 0.3) : 0;
       this.hookSpots[i].on = () => lit && (i % 2 === 0 || i === BRIGHTEST);
       if (i === BRIGHTEST && w.heirloom !== "whole") l.mat.color.set(w.heirloom === "mended" ? "#e0604f" : "#9a4a42");
     });
@@ -1252,10 +1253,14 @@ export class World3D {
     const fog = this.scene.fog as THREE.Fog;
     lerpColor(fog.color, s.fog, k);
     // Faces stay readable at night: darkness dims the world but never blacks it out.
-    this.hemi.intensity += (s.hemiI * (1 - dark * 0.45) - this.hemi.intensity) * k;
+    this.hemi.intensity += (s.hemiI * (1 - dark * 0.3) - this.hemi.intensity) * k;
     this.sun.intensity += (s.sunI * (1 - dark * 0.55) - this.sun.intensity) * k;
 
     const [X, Y, Z] = at(this.px, this.pz);
+    // A soft light from where we're looking, stronger in the dark, so faces always read.
+    this.fill.intensity += (dark * 1.5 - this.fill.intensity) * k;
+    this.fill.position.copy(this.camera.position);
+    this.fill.target.position.set(X, Y + 1, Z);
     this.sun.target.position.set(X, Y, Z - 2);
     this.sun.position.set(X - 14, Y + 20, Z + 16);
 
@@ -1293,9 +1298,13 @@ export class World3D {
   private clampLook() {
     const r = this.region;
     const span = 8.5 * Math.max(1, (16 / 9) / this.camera.aspect) * 0.9;
-    const x0 = worldX(r.x0) + span;
-    const x1 = worldX(r.x1) - span;
-    this.lookAt.x = x0 < x1 ? THREE.MathUtils.clamp(this.lookAt.x, x0, x1) : (worldX(r.x0) + worldX(r.x1)) / 2;
+    // Rooms stop at their walls, which sit just past where you can walk.
+    const room = r.id === "workshop" || r.id === "home";
+    const left = room ? worldX(r.min) - 1 : worldX(r.x0);
+    const right = room ? worldX(r.max) + 1 : worldX(r.x1);
+    const x0 = left + span;
+    const x1 = right - span;
+    this.lookAt.x = x0 < x1 ? THREE.MathUtils.clamp(this.lookAt.x, x0, x1) : (left + right) / 2;
   }
 
   private updateCamera(dt: number) {

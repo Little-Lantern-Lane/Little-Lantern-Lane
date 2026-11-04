@@ -7,10 +7,11 @@
   "scripts": {
     "ink": "inkjs-compiler -o public/festival.json story/festival.ink",
     "bundle": "esbuild src/main.ts --bundle --format=esm --minify --sourcemap --outfile=public/main.js",
-    "build": "npm run ink && npm run bundle",
+    "build": "npm run ink && npm run bundle && npm run look",
     "dev": "npm run ink && esbuild src/main.ts --bundle --format=esm --sourcemap --outfile=public/main.js --servedir=public --serve=8140 --watch=forever",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run --testTimeout=180000",
+    "look": "mkdir -p public/look && cp demo-src/index.html demo-src/styles.css public/look/ && esbuild demo-src/main.ts --bundle --format=esm --minify --outfile=public/look/main.js"
   },
   "dependencies": {
     "inkjs": "^2.4.0",

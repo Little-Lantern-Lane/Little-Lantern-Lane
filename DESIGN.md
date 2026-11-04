@@ -153,3 +153,16 @@ Something to keep coming back to, without a currency or a shop.
   Affects evidence needs, content review, crisis handling, business model.
 - Crisis/safety handling if at-risk players use it.
 - ~~Optional second scenario where withdrawing is the effective choice.~~ Built as chapter two.
+
+## The move to 3D (2026-11-03)
+- **Style:** soft felt toys, chosen over paper cutouts after a side-by-side look test.
+- **Scope:** the world layer only. Story, rules, saves, panels and audio are unchanged, and the 2D game stays
+  live as the backup for Game Week.
+- **Positions:** the story still places everything by one number along the path. `src/world3d/space.ts` maps
+  that to 3D, and you can also walk across the path, more widely in the Square. This is what makes the world
+  feel bigger without new story content.
+- **Camera:** fixed angle, following the player. Interiors are doll's houses with no front wall.
+- **Challenges:** same rules and numbers as 2D. The walk back to Mara runs straight along one path, so the
+  pull, head-up timing and scoring are unchanged.
+- **Feeling bad:** colours drain and the view closes in around the player, as in 2D. Worth a clinician's eye,
+  since it now looks different; see CLINICIAN_REVIEW.md.

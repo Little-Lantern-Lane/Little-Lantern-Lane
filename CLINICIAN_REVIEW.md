@@ -133,3 +133,8 @@ before playtesting with real players. Each points to where it lives.
     up, and that grief still belongs? Fen admits he joked through hard years so he wouldn't
     have to feel them. (knots `into_shed`, `stay_with_it`; `fight`, `accept` and `grief` in
     `src/logic/meter.ts`)
+
+## Added for the 3D version
+- **How distress looks in 3D.** Colours drain and darkness closes in around the player, and in the memory
+  scenes villagers turn, raise an arm toward the player and take on a red tint. The rules are unchanged, but
+  this looks different from 2D. Does it read as a feeling, and not as judgment? (`src/world3d/World.ts`)

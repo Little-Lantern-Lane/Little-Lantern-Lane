@@ -2,3 +2,5 @@ node_modules/
 public/main.js
 public/main.js.map
 .gstack/
+public/festival.json
+public/look/
