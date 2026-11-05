@@ -4,7 +4,7 @@ Browser game teaching DBT skills. Read `DESIGN.md` before doing design or
 gameplay work. It holds the decisions made so far and the first prototype spec.
 
 ## Current goal
-Ship the 3D version of Lantern Night for Game Week (due Thursday 2026-11-05, midnight). The 2D game in the DBT-game repo is the backup.
+Ship Little Lantern Lane (the 3D game, formerly Lantern Night) for Game Week (due Thursday 2026-11-05, midnight). The 2D game in the DBT-game repo is the backup.
 exploration/adventure game meeting the brief, without losing the DBT teaching.
 
 ## Stack

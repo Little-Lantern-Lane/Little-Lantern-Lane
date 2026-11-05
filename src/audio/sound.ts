@@ -1,4 +1,4 @@
-// Procedural audio for Lantern Night. Every sound is synthesized with the Web
+// Procedural audio for Little Lantern Lane. Every sound is synthesized with the Web
 // Audio API: oscillators, a shared noise buffer, filters, envelopes and a
 // generated-impulse reverb. No samples, no assets.
 // Music is generative: each mood is a small "composer" that decides what to

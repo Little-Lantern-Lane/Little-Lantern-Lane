@@ -1,4 +1,4 @@
-# Lantern Night in 3D
+# Little Lantern Lane
 
 A browser game that teaches skills from DBT (dialectical behavior therapy) through a story set in a
 small village of soft toy animals. This is the 3D version; the 2D game in the DBT-game repo is the backup.

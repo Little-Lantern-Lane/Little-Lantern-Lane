@@ -1,8 +1,8 @@
 {
-  "name": "lantern-night-3d",
+  "name": "little-lantern-lane",
   "version": "0.0.1",
   "private": true,
-  "description": "Lantern Night in 3D: a browser game about DBT skills",
+  "description": "Little Lantern Lane: a 3D browser game about DBT skills",
   "type": "module",
   "scripts": {
     "ink": "inkjs-compiler -o public/festival.json story/festival.ink",

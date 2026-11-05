@@ -100,7 +100,7 @@ const CHAPTERS: Record<number, { title: string; goal: string; meter: [Ends, Ends
   4: { title: "Chapter four: Opening day", goal: "Help Ash open the tea room.", meter: [["Tense", "At ease"], ["Just say yes", "Say what I mean"]] },
   5: { title: "Chapter five: The first snow", goal: "Get Pip and Juno through the night.", meter: [["Worried", "Settled"], ["Check the road", "Stay with the kids"]] },
   6: { title: "Chapter six: The tide", goal: "Help Tobin and Hesketh with the shed.", meter: [["Hurting", "Okay"], ["Fight it", "Let it be"]] },
-  8: { title: "Lantern Night", goal: "Mara's looking for you in the Square.", meter: [["Feeling bad", "Feeling good"], ["Want to hide", "Be with people"]] },
+  8: { title: "Little Lantern Lane", goal: "Mara's looking for you in the Square.", meter: [["Feeling bad", "Feeling good"], ["Want to hide", "Be with people"]] },
   7: { title: "The week after: The far bank", goal: "Mend the footbridge: 6 driftwood and 2 ironstone, for Mara at the river.", meter: [["Restless", "Content"], ["Get it done", "Be in it"]] },
 };
 
@@ -612,7 +612,7 @@ function showEnd(log: PlaytestLog) {
   const title = document.createElement("h2");
   title.textContent = "The lantern burns on into the night.";
   const thanks = document.createElement("p");
-  thanks.textContent = "Thank you for playing Lantern Night.";
+  thanks.textContent = "Thank you for playing Little Lantern Lane.";
   const again = document.createElement("button");
   again.className = "primary";
   again.textContent = "Back to the village";
