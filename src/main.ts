@@ -11,13 +11,17 @@ import type { Completeness } from "./logic/outcome";
 import type { GameEvent } from "./logic/tags";
 import { createSound, type Sfx } from "./audio/sound";
 import { World3D, type SceneHooks } from "./world3d/World";
-import { GROUND_Y } from "./game/layout";
+import { FISHING_SPOTS, GROUND_Y, NODES, riverMidX } from "./game/layout";
 import { createDialogueBox } from "./ui/dialogue";
 import { createHud } from "./ui/hud";
 import { createMeterView } from "./ui/meter";
 import { factCard, runBreathScene, runChainScene, runCheckInScene, runFitScene, runMendScene, runSaveScene, runSayItScene } from "./ui/scenes";
 import { CHAPTER_NAMES, clearSave, readLooks, readSave, writeLooks, writeSave, type Looks, type SaveChapter, type SaveGame } from "./save";
-import { DEFAULT_CHARACTER, DEFAULT_HOME, growRoom, remainingAdditions } from "./logic/appearance";
+import { buildAddition, DEFAULT_CHARACTER, DEFAULT_HOME, growRoom, hasAddition, remainingAdditions, type Decor } from "./logic/appearance";
+import { addPiece, canPlace, FURNITURE, place, putAway, turnPiece, type Furnishings, type FurnitureId } from "./logic/furniture";
+import { canAfford, canGift, countOf, craft, gather, give, ITEMS, makeTool, normalizeBag, pay, sell, spendItems, type BagState, type Buyer, type Friend, type ItemId } from "./logic/bag";
+import { COIN, itemIcon } from "./ui/items";
+import { runBagScreen, runCraftScene, runFurnishScene, runGiftScene, runSellScene, runShopScene, runStallScene, type ShopRow } from "./ui/trade";
 import { applyCharacter, runCharacterScreen, runGrowScene, runHomeScreen } from "./ui/wardrobe";
 import { PlaytestLog } from "./playtest";
 
@@ -36,7 +40,7 @@ const titleCard = $("#title");
 
 // How you look and your home. The first new game asks; after that it's on the title screen.
 const savedLooks = readLooks();
-let looks: Looks = savedLooks ?? { character: DEFAULT_CHARACTER, home: DEFAULT_HOME };
+let looks: Looks = savedLooks ?? { character: DEFAULT_CHARACTER, home: DEFAULT_HOME, owned: [] };
 let chosenLooks = savedLooks !== null;
 function useLooks(next: Looks) {
   looks = next;
@@ -46,8 +50,9 @@ function useLooks(next: Looks) {
 applyCharacter(looks.character);
 
 async function chooseCharacter() {
-  const character = await runCharacterScreen(panel, looks.character, () => sound.play("ui"));
+  const character = await runCharacterScreen(panel, looks.character, () => sound.play("ui"), looks.owned);
   useLooks({ ...looks, character });
+  world?.refreshLook();
 }
 
 async function chooseHome() {
@@ -94,7 +99,15 @@ const CHAPTERS: Record<number, { title: string; goal: string; meter: [Ends, Ends
   4: { title: "Chapter four: Opening day", goal: "Help Ash open the tea room.", meter: [["Tense", "At ease"], ["Just say yes", "Say what I mean"]] },
   5: { title: "Chapter five: The first snow", goal: "Get Pip and Juno through the night.", meter: [["Worried", "Settled"], ["Check the road", "Stay with the kids"]] },
   6: { title: "Chapter six: The tide", goal: "Help Tobin and Hesketh with the shed.", meter: [["Hurting", "Okay"], ["Fight it", "Let it be"]] },
+  7: { title: "The week after: The far bank", goal: "Mend the footbridge: 6 driftwood and 2 ironstone, for Mara at the river.", meter: [["Restless", "Content"], ["Get it done", "Be in it"]] },
 };
+
+/** The week after the storm moves through three goals. */
+const WOODS_GOALS = [
+  "Mend the footbridge: 6 driftwood and 2 ironstone, for Mara at the river.",
+  "Cross the river. Bring Tobin 2 birch bark, a glowcap and some skyglass for a lantern.",
+  "Stay as long as you like, then walk home.",
+];
 
 function showChapter(level: number) {
   const c = CHAPTERS[level];
@@ -109,11 +122,161 @@ let variant: Variant = "main";
 
 const hooks: SceneHooks = {
   sound,
-  onArea: (a) => hud.showArea(a.name),
+  onArea: (a) => {
+    hud.showArea(a.name);
+    hud.showTurn(a.id === "wood" || a.id === "river" || a.id === "farbank", (by) => world?.turnCamera(by));
+    furnishButton.hidden = !["home", "bedroom", "sitting", "cellar"].includes(a.id);
+    inWoods = a.id === "wood" || a.id === "river" || a.id === "farbank";
+    paintBag();
+  },
   onApproachEvent: (name, arg) => apply({ name, arg }),
   onAction: (label, run) => hud.setAction(label, run),
   touch,
+  bag: () => state.bag,
+  onStall: () => void useStall(),
+  onGather(item, fish) {
+    setBag(gather(state.bag, item));
+    gatherNote(item, fish ? "Landed" : `In your bag: ${countOf(state.bag, item)}`);
+    // Time spent on small things settles you a little.
+    if (fish) apply({ name: "soothe", arg: "busy" });
+  },
 };
+
+/** A small note when something lands in your bag. */
+function gatherNote(item: ItemId, line: string) {
+  const n = document.createElement("div");
+  n.className = "gather-toast";
+  n.innerHTML = itemIcon(item);
+  const t = document.createElement("div");
+  t.textContent = ITEMS[item].name;
+  const sub = document.createElement("span");
+  sub.textContent = line;
+  t.append(sub);
+  n.append(t);
+  hud.toast(n, 2600);
+}
+
+function setBag(bag: BagState) {
+  state = { ...state, bag };
+  paintBag();
+}
+
+let inWoods = false;
+const bagButton = document.createElement("button");
+bagButton.className = "hud-bag";
+bagButton.hidden = true;
+$("#hud").append(bagButton);
+function paintBag() {
+  bagButton.hidden = state.world.level !== 7 && state.bag.found.length === 0 && !inWoods;
+  bagButton.innerHTML = `<span>Bag (B)</span><span class="coins">${COIN}${state.bag.coins}</span>`;
+}
+
+async function openBag() {
+  if (bagButton.hidden || !panel.hidden || !bagFree) return;
+  world?.setLocked(true);
+  let change = false;
+  await runBagScreen(panel, () => state.bag, (tool) => {
+    setBag(makeTool(state.bag, tool));
+    sound.play("mend");
+  }, () => (change = true));
+  if (change) await chooseCharacter();
+  if (bagFree) world?.setLocked(false);
+}
+/** The stall in the woods: selling, buying and making, whichever chapter you've wandered in from. */
+async function useStall() {
+  if (!panel.hidden || !bagFree) return;
+  world?.setLocked(true);
+  for (;;) {
+    const pick = await runStallScene(panel, state.bag);
+    if (!pick) break;
+    if (pick === "sell") await runSellScene(panel, "stall", () => state.bag, (id) => {
+      setBag(sell(state.bag, id));
+      sound.play("pickup");
+    });
+    if (pick === "make") await runCraftScene(panel, () => state.bag, (id) => {
+      setBag(craft(state.bag, id));
+      sound.play("mend");
+    });
+    if (pick === "clothes") await runShopScene(panel, "nell", () => state.bag, () => looks.owned, buy);
+    if (pick === "house") await runShopScene(panel, "tobin", () => state.bag, ownedAtTobin, buy);
+    if (pick === "furniture") await runShopScene(panel, "furniture", () => state.bag, () => [], buy);
+  }
+  if (bagFree) world?.setLocked(false);
+}
+
+/** True while you're free to walk about, so the bag doesn't open over a conversation. */
+let bagFree = false;
+bagButton.addEventListener("click", () => void openBag());
+addEventListener("keydown", (e) => {
+  if (e.code === "KeyB" && !e.repeat) void openBag();
+  if (e.code === "KeyF" && !e.repeat) void openFurnish();
+});
+const furnishButton = document.createElement("button");
+furnishButton.className = "hud-bag hud-furnish";
+furnishButton.textContent = "Furnish (F)";
+furnishButton.hidden = true;
+furnishButton.addEventListener("click", () => void openFurnish());
+$("#hud").append(furnishButton);
+
+function setFurniture(furniture: Furnishings) {
+  useLooks({ ...looks, home: { ...looks.home, furniture } });
+  void world?.refreshHome(looks.home);
+}
+
+/** What's already yours, so the shops can say so. */
+function ownedAtTobin(): string[] {
+  return [...looks.home.decor, ...(hasAddition(looks.home, "up") ? ["room_up"] : []), ...(hasAddition(looks.home, "side") ? ["room_side"] : [])];
+}
+
+/** F, inside your home: put furniture down, move it, or make some. */
+async function openFurnish() {
+  const room = world?.roomHere();
+  if (!world || !room || !panel.hidden || !bagFree) return;
+  world.setLocked(true);
+  const chosen = await runFurnishScene(panel, room, () => looks.home.furniture, () => state.bag, (id) => {
+    const needs = (FURNITURE[id] as { needs?: Parameters<typeof canAfford>[1] }).needs;
+    if (!needs || !canAfford(state.bag, needs)) return;
+    setBag(spendItems(state.bag, needs));
+    setFurniture(addPiece(looks.home.furniture, id));
+    sound.play("mend");
+  }, (act) => {
+    if (act.kind === "away") setFurniture(putAway(looks.home.furniture, act.index));
+    if (act.kind === "turn") setFurniture(turnPiece(looks.home.furniture, act.index));
+  });
+  if (chosen) {
+    const spot = world.spotAhead();
+    if (canPlace(looks.home.furniture, chosen, room, spot.x, spot.z)) {
+      setFurniture(place(looks.home.furniture, chosen, room, spot.x, spot.z, spot.turn));
+      sound.play("hang");
+    } else {
+      const n = document.createElement("div");
+      n.className = "gather-toast";
+      n.textContent = "There's no room for that here. Try another spot.";
+      hud.toast(n, 2800);
+    }
+  }
+  if (bagFree) world.setLocked(false);
+}
+
+function buy(row: ShopRow) {
+  if (state.bag.coins < row.price) return;
+  setBag(pay(state.bag, row.price));
+  sound.play("pickup");
+  const clothes = ["leafcrown", "fishinghat", "mushroomcap", "leafcape"].includes(row.id);
+  if (row.id.startsWith("piece_")) {
+    setFurniture(addPiece(looks.home.furniture, row.id.slice(6) as FurnitureId));
+  } else if (row.id === "room_up" || row.id === "room_side") {
+    useLooks({ ...looks, home: buildAddition(looks.home, row.id === "room_up" ? "up" : "side") });
+    void world?.refreshHome(looks.home);
+  } else if (clothes) {
+    const slot = row.id === "leafcape" ? "extra" : "hat";
+    useLooks({ ...looks, owned: [...looks.owned, row.id], character: { ...looks.character, [slot]: row.id } });
+    world?.refreshLook();
+  } else {
+    useLooks({ ...looks, home: { ...looks.home, decor: [...looks.home.decor, row.id as Decor] } });
+    void world?.refreshHome(looks.home);
+  }
+}
 
 function apply(ev: GameEvent) {
   try {
@@ -126,6 +289,8 @@ function apply(ev: GameEvent) {
   world?.setFeeling(state.meter.distress);
   meter.render(state.meter);
   if (ev.name === "chapter") showChapter(state.world.level);
+  if (ev.name === "woods_goal") hud.setGoal(WOODS_GOALS[Number(ev.arg)] ?? "");
+  paintBag();
   const sfx = EVENT_SFX[ev.name];
   if (sfx) sound.play(sfx);
   if (ev.name === "fact" && ev.arg) {
@@ -146,12 +311,14 @@ function waitForChoice(choices: StoryChoice[]): Promise<StoryChoice> {
   const inWorld = choices.filter((c) => c.target);
   const plain = choices.filter((c) => !c.target);
   hud.setNext(choices);
+  bagFree = inWorld.length > 0;
   if (inWorld.length === 0) {
     world!.setLocked(true);
     return dialogue.ask(plain, false);
   }
   return new Promise((resolve) => {
     const done = (c: StoryChoice) => {
+      bagFree = false;
       world!.clearTargets();
       world!.setLocked(true);
       dialogue.dismiss();
@@ -166,15 +333,16 @@ function waitForChoice(choices: StoryChoice[]): Promise<StoryChoice> {
   });
 }
 
-const CHAPTER_ORDINAL: Record<SaveChapter, string> = { 2: "chapter two", 3: "chapter three", 4: "chapter four", 5: "chapter five", 6: "chapter six" };
-const FINISHED: Record<SaveChapter, string> = { 2: "Chapter one", 3: "Chapter two", 4: "Chapter three", 5: "Chapter four", 6: "Chapter five" };
+const CHAPTER_ORDINAL: Record<SaveChapter, string> = { 2: "chapter two", 3: "chapter three", 4: "chapter four", 5: "chapter five", 6: "chapter six", 7: "the far bank" };
+const FINISHED: Record<SaveChapter, string> = { 2: "Chapter one", 3: "Chapter two", 4: "The far bank", 5: "Chapter four", 6: "Chapter five", 7: "Chapter three" };
 
 async function play(chosen: Variant, from?: string, resume?: SaveGame) {
   variant = resume?.variant ?? chosen;
   state = resume?.game ?? initialState();
+  state = { ...state, bag: normalizeBag(state.bag) };
   meter.render(state.meter);
   showChapter(state.world.level);
-  const engine = new Engine(await storyJson, variant, () => state.meter.distress);
+  const engine = new Engine(await storyJson, variant, () => state.meter.distress, () => state.bag);
   if (resume) engine.loadState(resume.story);
   else if (from) engine.startAt(from);
   const log = new PlaytestLog(variant);
@@ -268,6 +436,30 @@ async function play(chosen: Variant, from?: string, resume?: SaveGame) {
         hud.controls("hang");
         await world!.runSecure();
         hud.controls("hidden");
+      } else if (scene === "sell") {
+        await runSellScene(panel, engine.getVar("trade_with") as Buyer, () => state.bag, (id) => {
+          setBag(sell(state.bag, id));
+          sound.play("pickup");
+        });
+      } else if (scene === "shop") {
+        const who = String(engine.getVar("trade_with"));
+        await runShopScene(panel, who, () => state.bag, () => (who === "nell" ? looks.owned : ownedAtTobin()), buy);
+        if (who === "tobin") await runShopScene(panel, "furniture", () => state.bag, () => [], buy);
+      } else if (scene === "craft") {
+        await runCraftScene(panel, () => state.bag, (id) => {
+          setBag(craft(state.bag, id));
+          sound.play("mend");
+        });
+      } else if (scene === "gift") {
+        const who = engine.getVar("trade_with") as Friend;
+        const r = canGift(state.bag, who) ? await runGiftScene(panel, who, state.bag) : null;
+        if (r) {
+          setBag(give(state.bag, who, r.item));
+          engine.setVar("gift_item", r.item);
+          engine.setVar("gift_name", ITEMS[r.item].name);
+          engine.setVar("gift_fit", r.fit);
+          sound.play("light");
+        }
       } else if (scene === "chain") {
         const record: ChainRecord = {
           variant,
@@ -361,6 +553,7 @@ $("#start-main").addEventListener("click", () => void begin("main"));
 $("#start-promise").addEventListener("click", () => void begin("promise"));
 $("#start-ch2").addEventListener("click", () => begin("main", "start_day_two"));
 $("#start-ch3").addEventListener("click", () => begin("main", "start_storm"));
+$("#start-woods").addEventListener("click", () => begin("main", "start_woods"));
 $("#start-ch4").addEventListener("click", () => begin("main", "start_mill"));
 $("#start-ch5").addEventListener("click", () => begin("main", "start_snow"));
 $("#start-ch6").addEventListener("click", () => begin("main", "start_coast"));
@@ -389,7 +582,7 @@ window.addEventListener("keydown", () => sound.unlock(), { once: true });
 
 // ?debug exposes the world for automated playtesting (walk the player, read state).
 if (new URLSearchParams(location.search).has("debug")) {
-  Object.assign(window, { lantern: { world: () => world, state: () => state, growHome } });
+  Object.assign(window, { lantern: { world: () => world, state: () => state, growHome, NODES, FISHING_SPOTS, riverMidX } });
 }
 
 const requested = new URLSearchParams(location.search).get("variant");

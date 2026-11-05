@@ -3,7 +3,7 @@
 // plush drawing code and runs the panels where the player picks.
 
 import {
-  ADDITIONS, ANIMALS, BODIES, CUSTOM_PARTS, DOOR_COLORS, EXTRAS, HATS, HOME_STYLES, OUTFITS, ROOF_COLORS, WALL_COLORS,
+  ADDITIONS, ANIMALS, BODIES, BOUGHT_CLOTHES, CUSTOM_PARTS, DOOR_COLORS, EXTRAS, HATS, HOME_STYLES, OUTFITS, ROOF_COLORS, WALL_COLORS,
   remainingAdditions, toggleAddition,
   type Addition, type CharacterChoice, type CustomHome, type HomeChoice,
 } from "../logic/appearance";
@@ -64,8 +64,8 @@ const OUTFIT_LOOKS: Record<CharacterChoice["outfit"], { name: string; extras: Lo
   sweater: { name: "Striped sweater", extras: ["sweater"] },
   hoodie: { name: "Hoodie", extras: ["hoodie"] },
 };
-const HAT_NAMES: Record<CharacterChoice["hat"], string> = { none: "No hat", bow: "Bow", flowercrown: "Flower crown", beanie: "Beanie", sunhat: "Sun hat" };
-const EXTRA_NAMES: Record<CharacterChoice["extra"], string> = { none: "Nothing", glasses: "Glasses", scarf: "Scarf", bowtie: "Bow tie" };
+const HAT_NAMES: Record<CharacterChoice["hat"], string> = { none: "No hat", bow: "Bow", flowercrown: "Flower crown", beanie: "Beanie", sunhat: "Sun hat", leafcrown: "Leaf crown", fishinghat: "Fishing hat", mushroomcap: "Mushroom cap" };
+const EXTRA_NAMES: Record<CharacterChoice["extra"], string> = { none: "Nothing", glasses: "Glasses", scarf: "Scarf", bowtie: "Bow tie", leafcape: "Leaf cape" };
 const BODY_NAMES: Record<CharacterChoice["body"], string> = { girl: "Girl", boy: "Boy" };
 
 /** The two faces: lashes and rounder cheeks, or soft brows. */
@@ -187,7 +187,9 @@ function close(panel: HTMLElement) {
 // --- Your character -----------------------------------------------------------------
 
 /** Pick how you look. Resolves with the choice when the player is done. */
-export function runCharacterScreen(panel: HTMLElement, start: CharacterChoice, onPick?: () => void): Promise<CharacterChoice> {
+export function runCharacterScreen(panel: HTMLElement, start: CharacterChoice, onPick?: () => void, owned: readonly string[] = []): Promise<CharacterChoice> {
+  // Bought clothes only show once they're yours, or if you're already wearing them.
+  const onOffer = (id: string) => !BOUGHT_CLOTHES.includes(id) || owned.includes(id) || id === start.hat || id === start.extra;
   return new Promise((resolve) => {
     let c = { ...start };
     const set = (patch: Partial<CharacterChoice>) => {
@@ -213,8 +215,8 @@ export function runCharacterScreen(panel: HTMLElement, start: CharacterChoice, o
         pickRow("Fur", [0, 1, 2], (i) => a.furs[i].name, c.fur, (fur) => set({ fur }), (i) => a.furs[i].fur),
         pickRow("Outfit", OUTFITS, (o) => OUTFIT_LOOKS[o].name, c.outfit, (outfit) => set({ outfit })),
         pickRow("Outfit color", [0, 1, 2, 3, 4, 5], (i) => OUTFIT_COLORS[i].name, c.color, (color) => set({ color }), (i) => OUTFIT_COLORS[i].outfit),
-        pickRow("Hat", HATS, (x) => HAT_NAMES[x], c.hat, (hat) => set({ hat })),
-        pickRow("Extra", EXTRAS, (x) => EXTRA_NAMES[x], c.extra, (extra) => set({ extra })),
+        pickRow("Hat", HATS.filter(onOffer), (x) => HAT_NAMES[x], c.hat, (hat) => set({ hat })),
+        pickRow("Extra", EXTRAS.filter(onOffer), (x) => EXTRA_NAMES[x], c.extra, (extra) => set({ extra })),
       );
       const done = button("That's me", "primary", () => {
         close(panel);

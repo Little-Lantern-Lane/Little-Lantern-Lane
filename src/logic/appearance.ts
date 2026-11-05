@@ -2,11 +2,15 @@
 // Drawing lives in src/ui/wardrobe.ts and src/game/homes.ts; this file holds the
 // options, the defaults, and the checks that keep a saved choice valid.
 
+import { normalizeFurnishings, NO_FURNITURE, type Furnishings } from "./furniture";
+
 export const BODIES = ["girl", "boy"] as const;
 export const ANIMALS = ["redpanda", "fox", "cat", "bunny", "raccoon", "koala"] as const;
 export const OUTFITS = ["tunic", "dress", "overalls", "sweater", "hoodie"] as const;
-export const HATS = ["none", "bow", "flowercrown", "beanie", "sunhat"] as const;
-export const EXTRAS = ["none", "glasses", "scarf", "bowtie"] as const;
+export const HATS = ["none", "bow", "flowercrown", "beanie", "sunhat", "leafcrown", "fishinghat", "mushroomcap"] as const;
+export const EXTRAS = ["none", "glasses", "scarf", "bowtie", "leafcape"] as const;
+/** Clothes you buy from Nell in the week after the storm, not on offer until then. */
+export const BOUGHT_CLOTHES: readonly string[] = ["leafcrown", "fishinghat", "mushroomcap", "leafcape"];
 /** Each animal comes in this many fur colors; outfits in this many colors. */
 export const FUR_COUNT = 3;
 export const OUTFIT_COLOR_COUNT = 6;
@@ -35,6 +39,9 @@ export const STARTING_OUTFIT: Record<CharacterChoice["body"], Pick<CharacterChoi
 export const HOME_STYLES = ["cottage", "mushroom", "burrow", "tower"] as const;
 export const PAINT_COUNT = 4;
 export const ADDITIONS = ["up", "side", "porch", "garden"] as const;
+/** Extras bought from Tobin with what you've earned. Separate from additions, which never cost anything. */
+export const DECOR = ["armchair", "ferns", "lamps", "rug", "keepsakes", "fence", "lights", "cellar"] as const;
+export type Decor = (typeof DECOR)[number];
 export type Addition = (typeof ADDITIONS)[number];
 
 export const CUSTOM_PARTS = {
@@ -71,6 +78,10 @@ export interface HomeChoice {
   grown: Addition[];
   /** How many additions the home has room for: one more at each save point. */
   slots: number;
+  /** Things you've bought for it. */
+  decor: Decor[];
+  /** Furniture you've made or bought, and where it stands. */
+  furniture: Furnishings;
 }
 
 export const DEFAULT_CUSTOM: CustomHome = {
@@ -78,11 +89,26 @@ export const DEFAULT_CUSTOM: CustomHome = {
   shutters: true, boxes: true, wall: WALL_COLORS[4], roofColor: ROOF_COLORS[6], doorColor: DOOR_COLORS[2], trim: DOOR_COLORS[1],
 };
 
-export const DEFAULT_HOME: HomeChoice = { kind: "style", style: "cottage", paint: 1, custom: DEFAULT_CUSTOM, grown: [], slots: 0 };
+export const DEFAULT_HOME: HomeChoice = { kind: "style", style: "cottage", paint: 1, custom: DEFAULT_CUSTOM, grown: [], slots: 0, decor: [], furniture: NO_FURNITURE };
+
+/** Which extra rooms the home has. A bedroom comes with the upper floor, a side room with the side addition. */
+export function hasRoom(home: HomeChoice, room: "bedroom" | "sitting" | "cellar"): boolean {
+  if (room === "bedroom") return home.grown.includes("up");
+  if (room === "sitting") return home.grown.includes("side");
+  return home.decor.includes("cellar");
+}
+
+/** Tobin builds an addition for coins: it doesn't use up the room the home gets at save points. */
+export function buildAddition(home: HomeChoice, a: Addition): HomeChoice {
+  if (home.grown.includes(a)) return home;
+  return { ...home, grown: ADDITIONS.filter((x) => x === a || home.grown.includes(x)), slots: Math.min(ADDITIONS.length, home.slots + 1) };
+}
 
 export function hasAddition(home: HomeChoice, a: Addition): boolean {
   return home.grown.includes(a);
 }
+
+export const hasDecor = (home: HomeChoice, d: Decor): boolean => (home.decor ?? []).includes(d);
 
 /** Additions the home doesn't have yet. */
 export function remainingAdditions(home: HomeChoice): Addition[] {
@@ -144,5 +170,7 @@ export function normalizeHome(raw: unknown): HomeChoice {
     custom,
     grown,
     slots,
+    decor: Array.isArray(r.decor) ? DECOR.filter((d) => (r.decor as unknown[]).includes(d)) : [],
+    furniture: normalizeFurnishings(r.furniture),
   };
 }

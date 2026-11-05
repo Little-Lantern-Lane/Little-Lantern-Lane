@@ -405,3 +405,39 @@ export const isEvening = (w: { time: string; weather: string }) => w.time === "n
 export function setLit(list: Lit[], evening: boolean) {
   for (const l of list) l.m.emissiveIntensity = evening ? l.night : l.day;
 }
+
+/** Shared by every see-through material: the spot to keep in view, and where it's seen from. */
+export const sight = { uYou: { value: new THREE.Vector3() }, uCam: { value: new THREE.Vector3() } };
+
+/**
+ * A copy of a material that dissolves between `sight`'s two points, so trees never hide the player
+ * in a place the camera can turn around in. Works on instanced meshes.
+ */
+export function seeThrough(base: THREE.Material): THREE.Material {
+  const m = base.clone();
+  m.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, sight);
+    sh.vertexShader = `varying vec3 vSee;\n${sh.vertexShader}`.replace(
+      "#include <project_vertex>",
+      `#include <project_vertex>
+      vec4 seeP = vec4(transformed, 1.0);
+      #ifdef USE_INSTANCING
+        seeP = instanceMatrix * seeP;
+      #endif
+      vSee = (modelMatrix * seeP).xyz;`,
+    );
+    sh.fragmentShader = `varying vec3 vSee;\nuniform vec3 uYou;\nuniform vec3 uCam;\n${sh.fragmentShader}`.replace(
+      "#include <clipping_planes_fragment>",
+      `#include <clipping_planes_fragment>
+      vec3 seeLine = uCam - uYou;
+      float seeT = clamp(dot(vSee - uYou, seeLine) / dot(seeLine, seeLine), 0.0, 1.0);
+      float seeD = length(vSee - (uYou + seeLine * seeT)) / 1.7;
+      if (seeT > 0.02 && seeD < 1.0) {
+        vec2 seeQ = floor(gl_FragCoord.xy * 0.5);
+        if (seeD < 0.72 || mod(seeQ.x + seeQ.y, 2.0) < 1.0) discard;
+      }`,
+    );
+  };
+  m.customProgramCacheKey = () => "see-through";
+  return m;
+}

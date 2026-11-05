@@ -4,7 +4,7 @@
 // looking toward -Z) always sees the player.
 
 import * as THREE from "three";
-import { EDGE_X, FOUNTAIN_X, HOME_DOOR, POLES, PROPS, USABLES, ZONES } from "../../game/layout";
+import { EDGE_X, FOUNTAIN_X, HOME_DOOR, LANE_GATE, POLES, PROPS, USABLES, ZONES } from "../../game/layout";
 import type { HomeChoice } from "../../logic/appearance";
 import type { WorldState } from "../../logic/world";
 import { ball, LANTERN_COLOURS, own, rbox, soft } from "../kit";
@@ -59,6 +59,15 @@ function textSign(p: Parts, text: string, x: number, y: number, z: number, w: nu
   face.userData.keep = true;
   p.add(face);
   p.winter.add(pbox(w + h * 0.5, 0.1, 0.2, 0.05, snowMat(), x, y + h / 2 + 0.05, z + 0.06));
+}
+
+/** A post pointing the way to the woods, for the chapters away from the village. */
+export function woodsPost(x: number, z: number): THREE.Group {
+  const p = new Parts();
+  const post = p.sub(x, 0, z);
+  post.add(pipe(0.07, 0.09, 2.3, soft("#7c5a42"), 0, 1.15, -0.06));
+  textSign(post, "TO THE WOODS", 0, 2.05, 0, 2.1, 0.4);
+  return bake(p.base);
 }
 
 function awning(p: Parts, x: number, y: number, z: number, w: number, a: string, b: string, n = 8, out = 1.1): void {
@@ -405,7 +414,7 @@ export function buildVillage(ctx: BuildContext): VillageKit {
   lamppost(p, X(415), 0, -3.2);
   block(X(415), -3.2, 0.3);
   // The lane sign, on two posts between the houses.
-  const laneSign = p.sub(1.7, 0, -3.5);
+  const laneSign = p.sub(-0.75, 0, -3.5);
   for (const x of [-1.1, 1.1]) laneSign.add(pipe(0.07, 0.09, 2.5, soft("#7c5a42"), x, 1.25, -0.08));
   textSign(laneSign, "LANTERN LANE", 0, 2.25, 0, 2.4, 0.42);
   lamppost(p, 19.15, 0, -3);
@@ -424,7 +433,15 @@ export function buildVillage(ctx: BuildContext): VillageKit {
   s.bush(10.6, 0, -3.5, 0.72, GREENS[0], ["#e98fb4", "#fbe08a", "#fffaf0"], 2);
   pot(p, s, 3.8, -3.4, "#f08a6a");
   pot(p, s, 6.95, -3.4, "#e98fb4");
-  fence(s, 0.6, 2.4, -3.45, () => 0);
+  // The gate to the woods, and the trail going off behind it.
+  const gateX = X(LANE_GATE);
+  const gateWood = soft("#8a6444");
+  for (const d of [-1.25, 1.25]) p.add(pipe(0.12, 0.15, 3.1, gateWood, gateX + d, 1.55, -3.2));
+  p.add(pbox(3.2, 0.22, 0.24, 0.08, soft("#6e4e38"), gateX, 3.1, -3.2));
+  const woodsSign = p.sub(gateX, 0, -3.22);
+  textSign(woodsSign, "TO THE WOODS", 0, 2.6, 0, 1.9, 0.38);
+  for (const d of [-1.25, 1.25]) block(gateX + d, -3.2, 0.14);
+  for (const [dx, z, w] of [[0.1, -3.05, 1], [-0.12, -3.6, 0.9], [0.14, -4.15, 0.95], [-0.05, -4.75, 0.85], [0.1, -5.4, 0.8]] as const) p.add(pbox(w, 0.08, 0.4, 0.04, soft("#d8c9a8"), gateX + dx, 0.04, z));
 
   // --- Market Street ---
   const BAKERY_X = 23.2;

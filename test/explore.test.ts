@@ -11,6 +11,7 @@ import { Engine, type StoryChoice, type StoryLine } from "../src/engine";
 import { applyEvent, initialState, type GameState } from "../src/logic/state";
 import { talkGroup, type CharacterId } from "../src/logic/cast";
 import type { Variant } from "../src/logic/facts";
+import { initialBag, ITEM_IDS } from "../src/logic/bag";
 import { areaAt, laneBlocked, NPC_SPOTS, phaseOf, USABLES, ZONES } from "../src/game/layout";
 
 const source = readFileSync("story/festival.ink", "utf8");
@@ -27,8 +28,15 @@ interface Problem {
 
 /** Seeded randomness so a failure can be replayed. */
 function rng(seed: number) {
-  let s = seed;
-  return () => (s = (s * 1103515245 + 12345) % 2 ** 31) / 2 ** 31;
+  // Multiplies stay inside 32 bits (Math.imul): a plain `*` here overflows a double's precision
+  // and falls into short cycles, which can keep a walker from ever picking the way out of a hub.
+  let s = seed >>> 0;
+  return () => {
+    s = (s + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 2 ** 32;
+  };
 }
 
 type Taken = Map<string, string>; // choice source -> its text
@@ -74,13 +82,17 @@ interface WalkResult {
 function walk(variant: Variant, start: string | null, seed: number, taken: Taken, offered: Taken, sceneOutcomes: Set<string>, problems: Problem[]): WalkResult {
   const rand = rng(seed);
   let state = initialState();
-  const engine = new Engine(json, variant, () => state.meter.distress);
+  // Most walks carry a full bag, so everything that needs gathered things gets offered. The rest
+  // start empty and fill up later, as a player would, so they can still finish.
+  const fullBag = { ...initialBag(), items: Object.fromEntries(ITEM_IDS.map((id) => [id, 9])) };
+  const carrying = rand() < 0.7;
+  let steps = 0;
+  const engine = new Engine(json, variant, () => state.meter.distress, () => (carrying || steps > 150 ? fullBag : initialBag()));
   if (start) {
     engine.startAt(start);
     // Jumping into a later chapter: give it a random history of what the player did and heard before.
     for (const v of MEMORIES) engine.setVar(v, rand() < 0.5);
   }
-  let steps = 0;
   let lastLines: string[] = [];
   const where = () => `${variant}/${start ?? "start"} seed ${seed}, step ${steps}: …${lastLines.slice(-2).join(" / ")}`;
 
@@ -140,6 +152,14 @@ function walk(variant: Variant, start: string | null, seed: number, taken: Taken
         engine.setVar("fought", fought);
         for (let i = 0; i < fought; i++) state = applyEvent(state, { name: "fight" });
       }
+      if (s === "gift") {
+        const chose = rand() < 0.8;
+        const fit = ["best", "good", "kind"][Math.floor(rand() * 3)];
+        outcome = chose ? fit : "changed mind";
+        engine.setVar("gift_item", chose ? "jam" : "");
+        engine.setVar("gift_name", "Bramble jam");
+        engine.setVar("gift_fit", fit);
+      }
       if (s === "breathe") {
         const n = Math.floor(rand() * 5);
         outcome = `${n} breaths`;
@@ -197,7 +217,7 @@ function choicesInSource(): string[] {
 // plays them on purpose: "Let Ash take over" (all three errands), "Ask about the stone"
 // (asked at the festival, then after the storm), and telling Nell what was in Rosa's notes
 // (her door story, then how the festival started, then Rosa's box after the storm).
-const PLAYED_BY_STORY_TESTS = ["Let Ash take over", "Ask about the stone", "Tell her what was in Rosa's notes", "Sit with her", "\"She didn't want you to have to thank her.\""];
+const PLAYED_BY_STORY_TESTS = ["Let Ash take over", "Ask about the stone", "Tell her what was in Rosa's notes", "Sit with her", "\"She didn't want you to have to thank her.\"", "Ask Wren about her back"];
 
 describe.skipIf(!process.env.EXPLORE)("exploring every choice", () => {
   const taken: Taken = new Map();
@@ -209,12 +229,13 @@ describe.skipIf(!process.env.EXPLORE)("exploring every choice", () => {
 
   const starts: [Variant, string | null][] = [
     ["main", null], ["promise", null], ["main", "start_day_two"], ["main", "start_storm"],
-    ["main", "start_mill"], ["main", "start_snow"], ["main", "start_coast"], ["main", "start_mill"],
+    ["main", "start_mill"], ["main", "start_snow"], ["main", "start_coast"], ["main", "start_woods"], ["main", "start_woods"],
   ];
   beforeAll(() => {
     let quiet = 0;
-    // Keep walking until nothing new has been tried for a good while.
-    for (let seed = 1; seed < 20000 && quiet < 1500; seed++) {
+    const stopAt = Date.now() + 600_000;
+    // Keep walking until nothing new has been tried for a good while, or the time's up.
+    for (let seed = 1; seed < 20000 && quiet < 1500 && Date.now() < stopAt; seed++) {
       const before = taken.size;
       const [variant, start] = starts[seed % starts.length];
       const r = walk(variant, start, seed, taken, offered, scenes, problems);

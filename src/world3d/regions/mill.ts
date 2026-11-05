@@ -3,12 +3,13 @@
 // through it; past that is the old mill office, a doll's-house room open toward the camera.
 
 import * as THREE from "three";
-import { GROUND_Y, PROPS, USABLES } from "../../game/layout";
+import { MILL_PATH, GROUND_Y, PROPS, USABLES } from "../../game/layout";
 import type { WorldState } from "../../logic/world";
 import {
   ball, BLOCK, boardCanvas, cyl, drift, flat, flow, glowing, groundFrom, isEvening, lantern, LANTERN_COLOURS, many, noShadow, own, paint, rbox, seeded, setLit, soft, steam, stoneWall, teacup, teapot, tree, waterSheet, type Lit, type Piece,
 } from "../kit";
 import { regionZ, worldX as X } from "../space";
+import { woodsPost } from "./village";
 import type { Blocker, LightSpot, RegionKit } from "../types";
 
 const WOOD = "#9b6b43";
@@ -657,6 +658,7 @@ export function buildMill(): RegionKit {
     [9900, "#b98a5e", [[-1, "#f6d36a", 1], [1, "#7fb0c9", 0]]],
     [10120, "#d9a77c", [[-1, "#c97b6a", 2]]],
   ];
+  g.add(woodsPost(X(MILL_PATH), -3.2));
   const blockers: Blocker[] = [];
   for (const [tx, col, chairs] of tables) {
     const t = cafeTable(col);

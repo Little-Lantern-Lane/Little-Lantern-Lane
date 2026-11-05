@@ -4,6 +4,7 @@
 
 import { Story } from "inkjs";
 import { outcome } from "./logic/outcome";
+import { canGift, countOf, FRIENDS, initialBag, isItem, type BagState, type Friend } from "./logic/bag";
 import { parseTags, type GameEvent, type SceneName } from "./logic/tags";
 import type { Variant } from "./logic/facts";
 import { isCharacterId, parseSpoken, type CharacterId, type SpokenLine } from "./logic/cast";
@@ -52,7 +53,7 @@ export class Engine {
   private story: Story;
 
   /** `distress` reads the meter live; Ink never calls it while reading ahead. */
-  constructor(json: string | object, variant: Variant, distress: () => number = () => 0) {
+  constructor(json: string | object, variant: Variant, distress: () => number = () => 0, bag: () => BagState = initialBag) {
     this.story = new Story(typeof json === "string" ? json : JSON.stringify(json));
     this.story.BindExternalFunction(
       "outcome",
@@ -60,6 +61,8 @@ export class Engine {
       true,
     );
     this.story.BindExternalFunction("distress", () => distress(), false);
+    this.story.BindExternalFunction("bag_count", (id: string) => (isItem(id) ? countOf(bag(), id) : 0), false);
+    this.story.BindExternalFunction("can_gift", (who: string) => FRIENDS.includes(who as Friend) && canGift(bag(), who as Friend), false);
     this.setVar("variant", variant);
   }
 

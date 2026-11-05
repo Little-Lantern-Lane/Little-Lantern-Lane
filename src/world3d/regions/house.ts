@@ -5,7 +5,7 @@
 
 import * as THREE from "three";
 import { PROPS, USABLES } from "../../game/layout";
-import { hasAddition, type HomeChoice } from "../../logic/appearance";
+import { hasAddition, hasDecor, hasRoom, type HomeChoice } from "../../logic/appearance";
 import type { WorldState } from "../../logic/world";
 import {
   ball, BLOCK, boardCanvas, cyl, drift, flat, flame, flicker, many, noShadow, own, paint, paintPlanks, rbox, room, seeded, soft, steam, surround, teacup, wallDoor, type Piece,
@@ -25,8 +25,11 @@ const PX = 40;
 
 const shade = (c: string, to: string, by: number) => `#${new THREE.Color(c).lerp(new THREE.Color(to), by).getHexString()}`;
 
+/** The end walls of a room in your home's colours. */
+export const roomSide = (c: Colours) => shade(shade(c.wall, "#e8c49a", 0.3), "#8a6a48", 0.14);
+
 /** Planks in your home's wall colour, warmed a little by the room, over a panelled wainscot in its trim. */
-function wallTexture(w: number, c: Colours) {
+export function wallTexture(w: number, c: Colours) {
   const wall = shade(c.wall, "#e8c49a", 0.3);
   const panel = shade(c.trim, wall, 0.45);
   return paint(w * PX, H * PX, (g) => {
@@ -58,7 +61,7 @@ function hearthTiles() {
   });
 }
 
-interface View {
+export interface View {
   sky: [string, string];
   roofs: string;
   ground: string;
@@ -69,7 +72,7 @@ interface View {
 }
 
 /** What the lane looks like through the glass at this moment. */
-function viewOf(ws: WorldState, garden: boolean): View {
+export function viewOf(ws: WorldState, garden: boolean): View {
   const snow = ws.weather === "snow";
   const rain = ws.weather === "storm";
   const time = ws.time;
@@ -88,7 +91,7 @@ function viewOf(ws: WorldState, garden: boolean): View {
   };
 }
 
-function drawOutside(c: CanvasRenderingContext2D, v: View) {
+export function drawOutside(c: CanvasRenderingContext2D, v: View) {
   const sky = c.createLinearGradient(0, 0, 0, 340);
   sky.addColorStop(0, v.sky[0]);
   sky.addColorStop(1, v.sky[1]);
@@ -269,6 +272,61 @@ function stairs(foot: number): THREE.Group {
   const rail = rbox(len + 0.4, 0.1, 0.1, 0.04, soft(WOOD_DARK), foot - (run * (steps - 1)) / 2, rise * (steps + 1) / 2 + 1.3, BACK + 1.04);
   rail.rotation.z = -Math.atan2(rise, run);
   g.add(rail);
+  return g;
+}
+
+/** An armchair, seat at the origin's height of a chair, facing +Z before it's turned. */
+function armchair(c: Colours): THREE.Group {
+  const g = new THREE.Group();
+  const cloth = soft(c.roof);
+  const dark = soft(shade(c.roof, "#2a2230", 0.2));
+  for (const [x, z] of [[-0.62, -0.5], [0.62, -0.5], [-0.62, 0.5], [0.62, 0.5]]) g.add(cyl(0.07, 0.05, 0.26, soft(WOOD_DARK), x, 0.13, z, 8));
+  g.add(rbox(1.6, 0.46, 1.4, 0.16, cloth, 0, 0.48, 0), rbox(1.18, 0.24, 1.08, 0.11, soft(c.wall), 0, 0.82, 0.08));
+  g.add(rbox(1.6, 1.3, 0.34, 0.16, cloth, 0, 1.26, -0.56));
+  for (const d of [-1, 1]) g.add(rbox(0.3, 0.62, 1.34, 0.14, dark, d * 0.72, 0.92, 0.02));
+  g.add(rbox(0.74, 0.5, 0.2, 0.1, soft(c.door), 0.08, 1.2, -0.34));
+  return g;
+}
+
+/** A fern in a clay pot. */
+function fern(s: number, seed: number): THREE.Group {
+  const g = new THREE.Group();
+  g.add(cyl(0.34, 0.25, 0.5, soft("#c97b5a"), 0, 0.25, 0, 14), cyl(0.37, 0.37, 0.09, soft("#b86a4c"), 0, 0.5, 0, 14), cyl(0.31, 0.31, 0.03, soft("#6a4a38"), 0, 0.53, 0, 14));
+  const r = seeded(seed);
+  const greens = ["#6ba65f", "#7fb86a", "#5a9455"];
+  for (let i = 0; i < 9; i++) {
+    const a = (i / 9) * Math.PI * 2 + r();
+    const frond = new THREE.Group();
+    frond.position.y = 0.55;
+    frond.rotation.y = a;
+    for (let j = 0; j < 4; j++) {
+      const t = j / 3;
+      frond.add(ball(0.2 - t * 0.09, soft(greens[(i + j) % 3]), 0, 0.2 + t * 0.34 - t * t * 0.32, 0.14 + t * 0.56, 0.35));
+    }
+    g.add(frond);
+  }
+  g.scale.setScalar(s);
+  return g;
+}
+
+/** A small brass lamp on a bracket, its glass lit. */
+function wallLamp(glow: THREE.Material): THREE.Group {
+  const g = new THREE.Group();
+  const brass = soft("#c9a24a", 0.4);
+  g.add(rbox(0.2, 0.42, 0.05, 0.02, brass, 0, 0, 0.03), rbox(0.08, 0.06, 0.34, 0.02, brass, 0, -0.08, 0.2));
+  g.add(cyl(0.13, 0.17, 0.08, brass, 0, -0.03, 0.36, 12), ball(0.17, glow, 0, 0.14, 0.36, 1.15), cyl(0.08, 0.15, 0.1, brass, 0, 0.36, 0.36, 12));
+  return g;
+}
+
+/** A shelf of things you've found: jars, stones, a mushroom. */
+function keepsakeShelf(): THREE.Group {
+  const g = new THREE.Group();
+  g.add(rbox(1.56, 0.1, 0.36, 0.04, soft(WOOD_LIGHT), 0, 0, 0.2));
+  for (const d of [-0.6, 0.6]) g.add(rbox(0.08, 0.2, 0.16, 0.03, soft(WOOD_DARK), d, -0.13, 0.1));
+  g.add(cyl(0.11, 0.11, 0.3, own("#cfe3ec", { roughness: 0.25, transparent: true, opacity: 0.7 }), -0.54, 0.2, 0.22, 12), cyl(0.115, 0.115, 0.05, soft("#a8674a"), -0.54, 0.37, 0.22, 12), ball(0.075, soft("#e98fb4"), -0.54, 0.13, 0.22));
+  g.add(ball(0.13, soft("#7fc4dc", 0.3), -0.2, 0.13, 0.22, 0.8), ball(0.08, soft("#d6dbe2", 0.3), -0.02, 0.09, 0.26, 0.8));
+  g.add(cyl(0.05, 0.065, 0.16, soft("#f6efe2"), 0.24, 0.13, 0.22, 10), ball(0.14, soft("#d9574a"), 0.24, 0.22, 0.22, 0.62));
+  g.add(ball(0.12, soft("#c47e52", 0.4), 0.56, 0.12, 0.22, 0.85));
   return g;
 }
 
@@ -537,7 +595,10 @@ export function buildHouse(home: HomeChoice): HouseKit {
   // A candle-warm light from the room itself, so it never feels empty, even with the stove out.
   // Only chapter five starts with the stove cold; the story lights it.
   const stoveLit = (ws: WorldState) => ws.level !== 5 || ws.props.includes("stove_fire");
+  let lampsOn = false;
   const lights: LightSpot[] = [
+    { pos: [wx - 3.3, 4.8, Z + BACK + 1], color: "#ffcf8e", power: 12, on: () => lampsOn },
+    { pos: [wx + 3.3, 4.8, Z + BACK + 1], color: "#ffcf8e", power: 12, on: () => lampsOn },
     // The stove carries the room through the power cut; by day it's only a warm corner.
     { pos: [sx, 1.6, Z + BACK + 2.4], color: "#ffa45e", power: 40, on: (ws) => stoveLit(ws) && (ws.level === 5 || ws.time === "night") },
     { pos: [sx, 1.6, Z + BACK + 2.4], color: "#ffa45e", power: 12, on: (ws) => stoveLit(ws) && ws.level !== 5 && ws.time !== "night" },
@@ -561,6 +622,12 @@ export function buildHouse(home: HomeChoice): HouseKit {
   // Your home's colours, and what it has grown.
   const stairFoot = X(7040);
   const stairBlockers: Blocker[] = [-0.5, -1.7, -2.9].map((d) => ({ X: stairFoot + d, Z: Z + BACK + 0.5, r: 0.62 }));
+  const chairX = X(6720);
+  const decorBlockers: Record<"armchair" | "ferns", Blocker[]> = {
+    armchair: [{ X: chairX, Z: Z + 0.6, r: 0.75 }],
+    ferns: [{ X: X(7265), Z: Z + BACK + 0.45, r: 0.28 }, { X: X(7630), Z: Z + 1.7, r: 0.36 }, { X: X(6432), Z: Z + 1.8, r: 0.36 }],
+  };
+  const lampGlow = own("#ffe2a8", { emissive: "#ffc878", emissiveIntensity: 1.1 });
   let garden = false;
   const refreshHome = (h: HomeChoice) => {
     const c = homeColours(h);
@@ -572,13 +639,66 @@ export function buildHouse(home: HomeChoice): HouseKit {
     wallMat.map?.dispose();
     wallMat.map = wallTexture(w, c);
     wallMat.needsUpdate = true;
-    for (const m of sideWalls) m.material = soft(shade(shade(c.wall, "#e8c49a", 0.3), "#8a6a48", 0.14));
+    for (const m of sideWalls) m.material = soft(roomSide(c));
     for (const m of curtains) m.material = soft(c.roof);
     garden = hasAddition(h, "garden");
     for (const b of stairBlockers) if (blockers.includes(b)) blockers.splice(blockers.indexOf(b), 1);
     if (hasAddition(h, "up")) {
       yours.add(stairs(stairFoot));
       blockers.push(...stairBlockers);
+    }
+    // A door in the end wall to the side room, and a hatch in the floor to the cellar.
+    if (hasRoom(h, "sitting")) {
+      const side = wallDoor(1.7, 3.1, c.door);
+      side.rotation.y = -Math.PI / 2;
+      side.position.set(x1, 0, 0.4);
+      yours.add(side);
+    }
+    if (hasRoom(h, "cellar")) {
+      const hx = X(6560);
+      yours.add(noShadow(rbox(1.7, 0.06, 1.3, 0.03, soft(WOOD_DARK), hx, 0.04, 1.7)));
+      for (const d of [-0.5, 0, 0.5]) yours.add(noShadow(rbox(0.46, 0.06, 1.14, 0.02, soft(WOOD), hx + d, 0.08, 1.7)));
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.03, 8, 18), soft("#6e6a70", 0.4));
+      ring.rotation.x = Math.PI / 2;
+      ring.position.set(hx + 0.5, 0.13, 1.7);
+      yours.add(ring);
+    }
+    // What you've bought for the place.
+    for (const list of Object.values(decorBlockers)) for (const b of list) if (blockers.includes(b)) blockers.splice(blockers.indexOf(b), 1);
+    if (hasDecor(h, "armchair")) {
+      const chair = armchair(c);
+      chair.position.set(chairX, 0, 0.6);
+      chair.rotation.y = -0.55;
+      yours.add(chair);
+      blockers.push(...decorBlockers.armchair);
+    }
+    if (hasDecor(h, "ferns")) {
+      [[X(7265), BACK + 0.45, 1, 3], [X(7630), 1.7, 1.25, 8], [X(6432), 1.8, 1.25, 14]].forEach(([x, z, s, seed]) => {
+        const f = fern(s, seed);
+        f.position.set(x, 0, z);
+        yours.add(f);
+      });
+      blockers.push(...decorBlockers.ferns);
+    }
+    lampsOn = hasDecor(h, "lamps");
+    if (lampsOn) {
+      for (const d of [-3.3, 3.3]) {
+        const l = wallLamp(lampGlow);
+        l.position.set(wx + d, 4.7, BACK);
+        yours.add(l);
+      }
+    }
+    if (hasDecor(h, "rug")) {
+      for (const [sx2, sz, y, col] of [[5.5, 2.6, 0.012, c.trim], [5.2, 2.36, 0.016, c.wall], [4.86, 2.14, 0.02, c.roof]] as const) {
+        const ring = noShadow(cyl(1, 1, 0.01, soft(col), rx, y, rugZ, 48));
+        ring.scale.set(sx2, 1, sz);
+        yours.add(ring);
+      }
+    }
+    if (hasDecor(h, "keepsakes")) {
+      const shelf = keepsakeShelf();
+      shelf.position.set(tx - 0.35, 3.05, BACK);
+      yours.add(shelf);
     }
     viewKey = "";
   };

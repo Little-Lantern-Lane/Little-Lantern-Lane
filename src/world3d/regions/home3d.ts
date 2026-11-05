@@ -6,7 +6,7 @@
 
 import * as THREE from "three";
 import { PAINTS } from "../../game/homes";
-import { hasAddition, type CustomHome, type HomeChoice } from "../../logic/appearance";
+import { hasAddition, hasDecor, type CustomHome, type HomeChoice } from "../../logic/appearance";
 import { rbox, soft } from "../kit";
 import { archShape, bake, barrelShape, chimney, cone, dome, door, dot, flowerBox, gableShape, LAMP, markPos, onRound, Parts, pbox, pipe, roofed, shapeOf, slab, snowMat, stovepipe, vane, win, type DoorKind, type WinOpts } from "./village-parts";
 
@@ -373,6 +373,42 @@ function garden(p: Parts, x0: number): void {
 }
 
 /** A home from what the player chose, with snow on it if `snow`. See the top of this file for its origin. */
+/** A low white fence along the front, leaving the way to the door clear (and the porch, if there is one). */
+function picketFence(p: Parts, g: Grow): void {
+  const z = 1.75;
+  const white = soft("#fffaf0");
+  const gap = g.porch ? 2.05 : 1.1;
+  const runs: [number, number][] = [[-3.5, -gap], [gap, g.garden ? (g.porch ? 5.5 : 4.35) : 3.5]];
+  for (const [a, b] of runs) {
+    const w = b - a;
+    const mid = (a + b) / 2;
+    for (const y of [0.34, 0.66]) p.add(pbox(w, 0.07, 0.04, 0.02, white, mid, y, z));
+    p.winter.add(pbox(w + 0.04, 0.06, 0.1, 0.02, snowMat(), mid, 0.73, z));
+    const n = Math.round(w / 0.26);
+    for (let i = 0; i <= n; i++) p.add(pbox(0.11, 0.86, 0.05, 0.03, white, a + (i / n) * w, 0.43, z + 0.03));
+  }
+}
+
+/** Warm bulbs on a wire between two posts, high enough to clear any porch. */
+function stringLights(p: Parts): void {
+  const z = 1.72;
+  const post = soft("#7c5a42");
+  const wire = soft("#5a4638");
+  const half = 2.95;
+  for (const s of [-1, 1]) p.add(pipe(0.05, 0.07, 3.4, post, s * half, 1.7, z));
+  const n = 12;
+  const y = (t: number) => 3.34 - 4 * t * (1 - t) * 0.34;
+  for (let i = 0; i < n; i++) {
+    const [t0, t1] = [i / n, (i + 1) / n];
+    const [x0, x1] = [-half + t0 * 2 * half, -half + t1 * 2 * half];
+    const seg = pbox(Math.hypot(x1 - x0, y(t1) - y(t0)) + 0.02, 0.022, 0.022, 0.008, wire, (x0 + x1) / 2, (y(t0) + y(t1)) / 2, z);
+    seg.rotation.z = Math.atan2(y(t1) - y(t0), x1 - x0);
+    p.add(seg);
+    if (i > 0) p.add(dot(0.075, LAMP, x0, y(t0) - 0.09, z));
+  }
+  p.spot(0, 3, z + 0.2, "#ffd98a", 12);
+}
+
 /** The colours of a home, whichever way it was chosen. */
 export function homeColours(home: HomeChoice): Colours {
   return home.kind === "custom"
@@ -392,6 +428,8 @@ export function buildHome(home: HomeChoice, snow: boolean): THREE.Group {
   const front = home.kind === "style" && home.style === "burrow" ? 0.45 : 0;
   if (g.porch) porch(p, c.roof, front);
   if (g.garden) garden(p, g.porch ? 2.15 : 1.0);
+  if (hasDecor(home, "fence")) picketFence(p, g);
+  if (hasDecor(home, "lights")) stringLights(p);
 
   const lights = p.spots.map((s) => ({ pos: markPos(s), color: s.color, power: s.power }));
   const smokes = p.smokes.map(markPos);

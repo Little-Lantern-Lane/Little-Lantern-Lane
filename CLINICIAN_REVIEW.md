@@ -143,3 +143,23 @@ before playtesting with real players. Each points to where it lives.
   can't skip those moments. But the story is about avoiding and approaching, and a cosy room with no cost could
   read as a place to hide. Is that a concern, or is a safe place to rest fine as long as the story still waits
   outside? (`canEnterHome` in `src/game/layout.ts`)
+
+## Added for the far bank
+- **A week with nothing wrong in it.** This part is meant to teach building ordinary good days and getting good at
+  small things, after the hard chapters. Nell says "You've spent a long time getting through your days, lately. Try
+  just having one." Is that faithful to building positive experiences and mastery, and does it avoid implying that
+  people should simply feel better now? (`=== woods ===`, `talk_nell_woods` in `story/festival.ink`)
+- **Fishing as staying present.** You can take the first twitch or let it go by and stay. Taking it isn't treated
+  as wrong, but the better fish does come from waiting. Does that risk reading as "patience is rewarded, impulses
+  are bad"? (`src/world3d/World.ts`, `fishFor` in `src/logic/bag.ts`)
+- **Gifts and attention.** Favourites are learned by asking people about themselves, and every gift gets a warm
+  reply. Is this a fair picture of paying attention to others, or could it suggest that care has to be earned with
+  the right present? (`=== given ===` in `story/festival.ink`)
+- **Coins in a game about wellbeing.** Earning and buying are kept to clothes and furniture. Is there anything here
+  that could read as "things make you feel better"? Catching a fish also moves the feeling meter a little toward
+  content. (`onGather` in `src/main.ts`)
+- **The woods as somewhere to go in any chapter.** You can now walk off to gather in the middle of most chapters,
+  with no cost, and come back to the story waiting. They're shut during the pull to hide, the shell, the storm and the
+  snowy night. Elsewhere, could wandering off read as a healthy break or as avoiding what the chapter asks of you?
+  (`canVisitWoods` in `src/game/layout.ts`)
+

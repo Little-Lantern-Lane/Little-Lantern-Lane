@@ -134,8 +134,47 @@ what's on screen matches what's said.
   for once. They make one new lantern and hang it on the harbour wall. (DBT: radical
   acceptance, turning the mind, willing hands.)
 
+## The far bank (2026-11-04)
+A new part between chapters three and four, in the week before Ash opens: the woods past Lantern Lane, a
+river, and a second forest over it. After three chapters of getting through hard days, a week with nothing
+wrong in it. The player starts it with nothing to do, and that's the point.
+
+- **Story:** the storm took the footbridge. Mara wants to mend one thing that can be mended. Six driftwood and
+  two ironstone rebuild it, and the village turns out to help. That opens the far bank, where the old lantern
+  makers got their glass. A birch, glowcap and skyglass lantern from Tobin gets hung on the bridge at sunset, and
+  Nell asks what was in your week. Every answer is met warmly and none changes anything. Then you stay as long as
+  you like and walk home.
+- **Getting going:** Tobin lends a hammer for stone, Nell a rod. Or make either in your bag from 2 driftwood and 1 birch bark, which works in any chapter.
+- **Fishing:** the float twitches (a small fish, if you take it). Let that go by and a real pull may come (a better
+  one). Striking early just resets the float. There's no failure and no timer on the player, only staying.
+- **Selling:** to villagers, each in their own trade: Ash mushrooms, Wren fruit, Tobin stones, Nell fish, and
+  anyone takes what you made. Nell sells clothes and Tobin makes things for the house.
+- **Gifts:** made at your own table, or anything from your bag. Favourites come out in conversation. There's no
+  friendship number, every gift gets a warm reply, and you gather five more things before giving the same person
+  another, so gifts can't be used to buy anyone.
+- **Coins buy extras only.** Nothing in the story needs them, and home additions stay free at save points so they
+  never reward playing a particular way.
+- **A real 3D place:** unlike everywhere else, the woods aren't a path. They're an open forest about 110 by 90 units
+  with side paths, glades and landmarks (a great old hazel, a ring of stones). The river curves through it, and
+  which bank you're on comes from the river, not from how far along you are. The camera sits higher, follows you, and
+  turns with Q and R or the on-screen buttons; walking is relative to it. A small window dissolves through trees between you and the camera; you can't walk through them yourself.
+  The village stays side-on because its story beats depend on it.
+- **Open from every chapter:** through the gate on Lantern Lane, or a signposted path from the mill and from
+  Saltmouth, and the way back returns you to wherever the chapter is. It's shut during the pull to hide, the shell,
+  the storm and the snowy night with the kids, so it can't skip those moments. The woods have snow in chapter five.
+  Before the week after the storm the bridge is out and tools aren't yet given, so only the near bank's free things
+  can be gathered. Once built, the bridge and lantern stay. Outside that week a stall by the gate stands in for the
+  villagers: sell anything, buy clothes and house things, make things.
+- **Rooms and furniture:** the home can have an upstairs bedroom, a side room and a cellar. The first two come with
+  the additions, free at save points, or Tobin builds them for coins, and the house grows outside too. Furniture is
+  made from what you gather or bought, kept in a store, and put down wherever you stand (F inside your home), then
+  turned or put away. Some pieces can only be made. The main room's story spots stay clear. Furniture is saved with
+  your home, so it lasts across games.
+- **Code:** rules in `src/logic/bag.ts`, places in `src/game/layout.ts`, scenery in `src/world3d/regions/woods.ts`,
+  furniture in `src/logic/furniture.ts`, rooms in `src/world3d/regions/rooms.ts`, panels in `src/ui/trade.ts`. Internally it's level 7, played between 3 and 4.
+
 ## Your look and your home (2026-11-02)
-Something to keep coming back to, without a currency or a shop.
+Something to keep coming back to. (This section said "without a currency or a shop"; the far bank below adds both, but only for extras.)
 - **Your character:** chosen on the first new game, changeable from the title screen. Two bodies
   (girl, boy) that change only the face; six animals, three furs each, five outfits in six colors,
   a hat and an extra. All outfits are open to both bodies; the defaults match the body.

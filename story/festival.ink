@@ -46,6 +46,23 @@ VAR rest_kind = ""        // "full" | "partial"
 VAR breaths = 0           // set by the breathing scene: slow breaths taken
 VAR lost = false
 VAR next_chapter = 0      // which chapter a save point leads into
+// The week after the storm
+VAR woods_stage = 0       // 0 mending the bridge, 1 the far bank is open, 2 the lantern is hung
+VAR has_rod = false
+VAR has_hammer = false
+VAR trade_with = ""       // who a selling, gift or shop panel is for
+VAR gift_item = ""        // set by the gift panel; empty if you changed your mind
+VAR gift_name = ""        // what the item is called, Capitalised
+VAR gift_fit = ""         // "best" | "good" | "kind"
+VAR gifts_given = 0
+VAR mara_week = false
+VAR nell_likes = false
+VAR tobin_likes = false
+VAR ash_likes = false
+VAR bakers_like = false
+VAR kids_like = false
+EXTERNAL bag_count(id)
+EXTERNAL can_gift(who)
 // Conversations: which part of the story we're in, and who you've talked to in it
 VAR phase = ""            // "afternoon" | "facts" | "festival" | "day2" | "after_storm"
 VAR seen_nell = ""
@@ -1653,14 +1670,376 @@ pip/laugh: BYE!
 ->->
 
 // ---------------------------------------------------------------------------
+// The week after the storm: the far bank. After three chapters of getting
+// through hard days, a week with nothing wrong in it. Gathering, fishing and
+// giving are small ordinary things done for their own sake, and getting good at
+// something. (DBT: building positive experiences and mastery, participating
+// fully, attending to other people. Player-facing text never names these.)
+// Coins only buy extras; nothing in the story needs them.
+
+=== chapter_three_done ===
+~ next_chapter = 7
+Chapter three is done. #scene: save
++ [·] -> woods
+
+=== start_woods ===
+// Entry point for "jump to the far bank" on the title screen.
+~ completeness = "full"
+-> woods
+
+=== woods ===
+The week after the storm. #event: chapter 7 #event: woods_goal 0 #event: place mara:680
+~ phase = "woods"
+The rain stopped two days ago. The lanes are full of branches and the whole village smells of wet wood.
+You wake up with nothing to do. It feels odd, like a stair that isn't there.
+mara: There you are. Have you seen the footbridge?
+"The one over the river?" you ask.
+mara/sad: It's been roped off for years, and the storm finished it. Now there's two posts and a lot of river.
+mara: Nobody needs it this week. That's what's so nice about it. I'd just like to mend something that can actually be mended.
+mara/warm: The river left driftwood all down the near bank. Six good lengths would do it, and two lumps of ironstone for the pins.
+mara: Tobin's got a hammer you can borrow. Go through the gate at the end of the lane. I'll meet you at the water. #event: place mara:16700
+Past the gate, the woods have been left to themselves for years. Nobody's quite sure what's over there any more.
+-> woods_hub
+
+=== woods_hub ===
+- (hub)
++ {seen_mara != phase} [Talk to Mara #talk: mara #new]
+    -> talk_mara_woods -> hub
++ {seen_mara == phase} [Talk to Mara #talk: mara]
+    -> talk_mara_woods -> hub
++ {seen_nell != phase} [Talk to Nell #talk: nell #new]
+    -> talk_nell_woods -> hub
++ {seen_nell == phase} [Talk to Nell #talk: nell]
+    -> talk_nell_woods -> hub
++ {seen_tobin != phase} [Talk to Tobin #talk: tobin #new]
+    -> talk_tobin_woods -> hub
++ {seen_tobin == phase} [Talk to Tobin #talk: tobin]
+    -> talk_tobin_woods -> hub
++ {seen_ash != phase} [Talk to Ash #talk: ash #new]
+    -> talk_ash_woods -> hub
++ {seen_ash == phase} [Talk to Ash #talk: ash]
+    -> talk_ash_woods -> hub
++ {seen_bakers != phase} [Talk to the bakers #talk: wren #new]
+    -> talk_bakers_woods -> hub
++ {seen_bakers == phase} [Talk to the bakers #talk: wren]
+    -> talk_bakers_woods -> hub
++ {seen_kids != phase} [Talk to Pip and Juno #talk: pip #new]
+    -> talk_kids_woods -> hub
++ {seen_kids == phase} [Talk to Pip and Juno #talk: pip]
+    -> talk_kids_woods -> hub
++ [Make something at your table #use: craft_table]
+    -> make_things -> hub
++ {woods_stage >= 2} [Walk home #go: home] -> woods_done
+
+=== woods_done ===
+You sleep with the window open. In the morning there's still a little river in your ears.
+~ next_chapter = 4
+The far bank is done. #scene: save
++ [·] -> mill
+
+// Selling, giving and making. The panels are in src/ui/trade.ts.
+
+=== sell_to(who) ===
+~ trade_with = who
+You open your bag. #scene: sell
++ [·] ->->
+
+=== shop_with(who) ===
+~ trade_with = who
+You have a look. #scene: shop
++ [·] ->->
+
+=== make_things ===
+Your table, your scissors, whatever you brought home. #scene: craft
++ [·] ->->
+
+=== gift_to(who) ===
+~ trade_with = who
+~ gift_item = ""
+You look through your bag for something. #scene: gift
++ [·] -> given(who)
+
+=== given(who) ===
+{ gift_item == "":
+    You think again. Maybe another day.
+    ->->
+}
+~ gifts_given += 1
+{ who:
+- "nell":
+    { gift_fit:
+    - "best": nell/warm: {gift_name}. Now who told you? Sit down. I'm having this right now, and you can watch.
+    - "good": nell/smile: {gift_name}! That's supper sorted, and I didn't have to get up.
+    - else: nell/smile: {gift_name}. I can't say I know what to do with it, and I'll enjoy finding out.
+    }
+- "ash":
+    { gift_fit:
+    - "best": ash/warm: {gift_name}. You remembered. I said that once, in passing, about a week ago.
+    - "good": ash/smile: Oh, this'll brew. Thank you. I'm going to smell it for a while first.
+    - else: ash/smile: {gift_name}. It's going on the shelf by the till, so I can look at it when I panic.
+    }
+- "tobin":
+    { gift_fit:
+    - "best": tobin/surprised: Where did you... no, keep your secrets. I know exactly which lantern this is for.
+    - "good": tobin/smile: Now that's got some colour in it. Hesketh would say something rude and put it in his pocket.
+    - else: tobin/laugh: {gift_name}, for a man with glue on both hands. I'll treasure it. Stickily.
+    }
+- "wren":
+    { gift_fit:
+    - "best": wren/warm: Oh. Oh, that's my mother's kitchen, that smell. Give me a minute.
+    - "good": wren/smile: That's going in something by tomorrow morning. Thank you.
+    - else: wren/smile: {gift_name}. Well. I shall put it on the windowsill and Oda can explain it to the customers.
+    }
+- "oda":
+    { gift_fit:
+    - "best": oda/warm: For me? Not for the shop? Nobody brings me things. I bring the things.
+    - "good": oda/smile: That'll do nicely with the end of a loaf.
+    - else: oda/smile: {gift_name}. Lovely. I've no idea. Lovely.
+    }
+- "mara":
+    { gift_fit:
+    - "best": mara/warm: I didn't have this on any list. I think that might be what I like about it.
+    - "good": mara/smile: You made this? It's better than something I'd have planned.
+    - else: mara/smile: {gift_name}. Thank you. I'm going to carry it around all day and not write anything down about it.
+    }
+- "pip":
+    { gift_fit:
+    - "best": pip/happy: THIS IS THE BEST ONE. Juno, LOOK. No, not with your hands.
+    - "good": pip/smile: Can I eat it? I'm going to eat it.
+    - else: pip/smile: What's it do? Does it do anything? I'm keeping it anyway.
+    }
+- "juno":
+    { gift_fit:
+    - "best": juno/warm: It's got eleven edges. I checked. Thank you. This is going in the good box.
+    - "good": juno/smile: That's the fourth kind I've seen. I'll write it down.
+    - else: juno/smile: Thank you. I don't have a box for this yet. I'll start one.
+    }
+}
+->->
+
+=== talk_mara_woods ===
+{ seen_mara != phase:
+    ~ seen_mara = phase
+    { woods_stage:
+    - 0: mara: Two posts. I've measured them. I don't know why, they're the same as they were.
+    - 1: mara/smile: Walk on it. Go on. Everyone keeps standing at the end looking at it like it might say something.
+    - else: mara/warm: I went a whole hour today without knowing what time it was.
+    }
+}
+- (menu)
++ {woods_stage == 0 && bag_count("driftwood") >= 6 && bag_count("ironstone") >= 2} ["I've got the driftwood and the ironstone."]
+    -> bridge_built ->->
++ {woods_stage == 0} ["What does the bridge need?"]
+    mara: Six lengths of driftwood, from along the bank. Two lumps of ironstone for the pins.
+    { not has_hammer:
+        mara: You'll want Tobin's hammer for the stone. He's on Market Street, by the workshop.
+    }
+    -> menu
++ {not mara_week} ["How's your week?"]
+    ~ mara_week = true
+    mara/tired: I keep waking at five to do things that don't need doing.
+    mara: I made a list of what to do with a free day. Then I noticed what I'd done.
+    mara/smile: My grandmother used to bring me something from every walk. Never anything useful. A stone with a line through it, once. I've still got that.
+    -> menu
++ {can_gift("mara")} [Give Mara something]
+    -> gift_to("mara") -> menu
++ [Leave her to it]
+    ->->
+
+=== bridge_built ===
+You put it all down in a heap at the water's edge. #event: use_items bridge
+Mara looks at the heap. Then she goes and gets people.
+It takes the village three days and one long argument about pins. #event: place tobin:16820 #event: place wren:16900 #event: place oda:16960
+Oda brings bread down and doesn't go back. Tobin hammers. Nell supervises from her stool, which nobody asked her to do.
+On the third evening Pip runs across it and back, shrieking. Then everyone just stands there. #event: prop on:bridge #event: woods_goal 1
+~ woods_stage = 1
+~ phase = "woods_far"
+tobin/smile: You know what Hesketh told me about over there? When he was young, the lantern makers crossed for their glass. Skyglass, he called it. There's a mushroom that keeps its light after dark, too.
+tobin: Nobody's lit a lantern on the far bank in sixty years.
+tobin/warm: Bring me two strips of birch bark, a glowcap and a piece of skyglass, and I'll make one. We could hang it right here.
+mara/warm: Well. That's a better list than any of mine. #event: place tobin:off #event: place wren:off #event: place oda:off #event: place mara:17560
+-> settle_people ->
+->->
+
+=== settle_people ===
+// The people the bridge scene moved go back to where they usually stand.
+Everyone drifts back up the lane for supper. #event: unplace tobin #event: unplace wren #event: unplace oda
+->->
+
+=== talk_nell_woods ===
+{ seen_nell != phase:
+    ~ seen_nell = phase
+    { not has_rod:
+        nell/smile: Sit. You're making the fish nervous.
+        nell: Sixty years I've had this stool here. Everyone thinks I come down for the fish.
+        You sit. The river goes past. It's a while before either of you says anything.
+        nell/warm: You've spent a long time getting through your days, lately. Try just having one.
+        She lifts a spare rod out of the reeds and puts it across your knees. #event: tool rod
+        ~ has_rod = true
+        nell: The float will twitch first. That's a little one, if you want it. Or you can let that go by, and see what comes after. You can't make them do anything. You can only stay.
+    - else:
+        { woods_stage:
+        - 0: nell: Still here. So are they.
+        - 1: nell/smile: They've put the bridge back two feet to the left. Nobody will notice but me and the river.
+        - else: nell/warm: There. You've gone a better colour this week.
+        }
+    }
+}
+- (menu)
++ [Sell her some fish]
+    nell: Fish and anything you've cooked. I've stopped pretending I'm going to.
+    -> sell_to("nell") -> menu
++ ["Do you make clothes?"]
+    nell/smile: I make everything. Most of it's in this basket. I'd rather it was on someone.
+    -> shop_with("nell") -> menu
++ {not nell_likes} ["What's the best thing you've ever caught?"]
+    ~ nell_likes = true
+    nell/warm: Trout. Every time, trout. And a pot of bramble jam on the side of the plate, which my mother said was disgusting.
+    -> menu
++ {can_gift("nell")} [Give Nell something]
+    -> gift_to("nell") -> menu
++ [Sit a while, then go]
+    ->->
+
+=== talk_tobin_woods ===
+{ seen_tobin != phase:
+    ~ seen_tobin = phase
+    { not has_hammer:
+        tobin/laugh: The bridge! Yes. Mara's told me. Mara's told everyone.
+        He takes a hammer off his belt and holds it out handle first. #event: tool hammer
+        ~ has_hammer = true
+        tobin: Hit the rock where the colour changes. Don't hit the rock where your hand is. I learned that one for you.
+    - else:
+        { woods_stage:
+        - 0: tobin: How's the hammer? How's the hand?
+        - 1: tobin/smile: Skyglass. Hesketh's gone quiet about it. He does that when he misses something.
+        - else: tobin/warm: I keep looking down the lane at it. It's a very small lantern. I can see it from here.
+        }
+    }
+}
+- (menu)
++ {woods_stage == 1 && bag_count("birch_bark") >= 2 && bag_count("glowcap") >= 1 && bag_count("skyglass") >= 1} ["I've got the bark, the glowcap and the skyglass."]
+    -> far_lantern ->->
++ {woods_stage == 1} ["What does the lantern need again?"]
+    tobin: Two strips of birch bark for the shade. One glowcap. One piece of skyglass. All from the far bank if you like, though the birch grows on both.
+    -> menu
++ [Sell him some stones]
+    tobin: Stones and shiny things. I grind them down for colour. It's why everything I own is slightly blue.
+    -> sell_to("tobin") -> menu
++ ["Could you make something for my house?"]
+    tobin/smile: I've been waiting all week for someone to ask me to make something that isn't a lantern.
+    -> shop_with("tobin") -> menu
++ {not tobin_likes} ["What do you wish you had?"]
+    ~ tobin_likes = true
+    tobin: A piece of real skyglass. I've only ever seen the old ones. Set in something, on a bit of copper, that'd be... well. I'd stop being funny for a minute.
+    -> menu
++ {can_gift("tobin")} [Give Tobin something]
+    -> gift_to("tobin") -> menu
++ [Let him get on]
+    ->->
+
+=== far_lantern ===
+Tobin takes it all to the bench and doesn't make a single joke for an hour. #event: use_items lantern
+It's small. The shade is pale bark, and the skyglass throws a blue shape on the wall. The glowcap sits inside it, barely lit.
+tobin/warm: You found all of that. I only stuck it together. Go on, you should be the one to hang it.
+Evening comes. People walk down through the wood without anyone having said to. #event: sunset #event: go bridge #event: place mara:17120 #event: place nell:17060 #event: place ash:17300 #event: place tobin:17360 #event: place wren:17020 #event: place oda:17420 #event: place pip:17180 #event: place juno:17260
+You tie it to the post in the middle of the bridge. It doesn't look like much. Then the light goes, and it does. #event: prop on:bridge_lantern
+~ woods_stage = 2
+~ phase = "woods_end"
+{ gifts_given > 2:
+    Oda's wearing something you gave her in a pocket. Juno has the good box. Nobody says anything about it.
+- else:
+    { gifts_given > 0:
+        Someone has a thing of yours in their pocket. They don't mention it. You notice anyway.
+    }
+}
+nell/warm: So. You've had a week. What was in it?
+* ["The river. Sitting there."]
+    nell/smile: It'll be there tomorrow. That's the good thing about it.
+* ["Finding things. Not knowing what's next."]
+    nell/smile: Then keep something back to go and look for.
+* ["People. Bringing them things."]
+    nell/smile: Yes. They'll want you to do it again, you know.
+* ["I don't know yet."]
+    nell/warm: That's all right. You had it whether you know or not.
+- It's not a big thing, a week like this. You'd forgotten you could have one. #event: woods_goal 2 #event: unplace mara #event: unplace nell #event: unplace ash #event: unplace tobin #event: unplace wren #event: unplace oda #event: unplace pip #event: unplace juno
+Ash opens in the morning. For now, you can stay as long as you like.
+->->
+
+=== talk_ash_woods ===
+{ seen_ash != phase:
+    ~ seen_ash = phase
+    { woods_stage:
+    - 0: ash/worried: I've got forty chairs and no idea what I'm serving. I'm being very calm about it.
+    - 1: ash/smile: A whole other wood. Do you know what grows in a wood nobody's been in for sixty years? Neither do I. Bring me some.
+    - else: ash/warm: Tomorrow. I keep saying it out loud to see if it's got any less frightening.
+    }
+}
+- (menu)
++ [Sell Ash some mushrooms]
+    ash: Anything I can dry, steep or put in a soup. My mother would ask for a receipt.
+    -> sell_to("ash") -> menu
++ {not ash_likes} ["What would you put on the menu, if you could have anything?"]
+    ~ ash_likes = true
+    ash/warm: Chanterelles, dried, in a broth. They smell of apricots, did you know? And something from over the river, if anyone ever gets there. A tea nobody else has.
+    -> menu
++ {can_gift("ash")} [Give Ash something]
+    -> gift_to("ash") -> menu
++ [Leave Ash to the chairs]
+    ->->
+
+=== talk_bakers_woods ===
+{ seen_bakers != phase:
+    ~ seen_bakers = phase
+    { woods_stage:
+    - 0: wren/smile: Good, it's you. Oda's got me resting my back, which means I'm telling her how to do everything from a chair.
+    - 1: oda/smile: Bread went down that bridge faster than the bridge went up.
+    - else: wren/warm: Last of the plums, if you find any. Then it's all apples till spring.
+    }
+}
+- (menu)
++ [Sell the bakers some fruit]
+    wren: Fruit, yes. Windfalls are fine, they're going in a pie, nobody's looking at them.
+    -> sell_to("wren") -> menu
++ {not bakers_like} ["What do you two miss?"]
+    ~ bakers_like = true
+    wren/warm: Wild plums. My mother made a tart every autumn. I haven't had a proper one since.
+    oda/smile: A bowl of soup somebody else made. And a fried perch. I'm not fussy. I just want to sit down.
+    -> menu
++ {can_gift("wren")} [Give Wren something]
+    -> gift_to("wren") -> menu
++ {can_gift("oda")} [Give Oda something]
+    -> gift_to("oda") -> menu
++ [Leave them to the ovens]
+    ->->
+
+=== talk_kids_woods ===
+{ seen_kids != phase:
+    ~ seen_kids = phase
+    { woods_stage:
+    - 0: pip/happy: We're EXPLORING. Juno's in charge of the numbers and I'm in charge of the rest.
+    - 1: juno: There are four hundred and six planks in the bridge if you count the small ones. Pip says I'm not allowed to tell people.
+    - else: pip/surprised: Is it true there's a mushroom that's a LIGHT?
+    }
+}
+- (menu)
++ {not kids_like} ["Found anything good?"]
+    ~ kids_like = true
+    pip/happy: Blackberries! I ate them. And I want a glowing mushroom for under my bed so it's not dark and it's also a mushroom.
+    juno: I collect stones. Clear ones are best. You can count the lines inside.
+    -> menu
++ {can_gift("pip")} [Give Pip something]
+    -> gift_to("pip") -> menu
++ {can_gift("juno")} [Give Juno something]
+    -> gift_to("juno") -> menu
++ [Let them explore]
+    ->->
+
+// ---------------------------------------------------------------------------
 // Chapter four: opening day. Asking for what you need, and saying no to a
 // friend, in a way that keeps the friend and keeps you. (DBT: DEAR MAN, GIVE,
 // FAST. Player-facing text never names these.)
 
-=== chapter_three_done ===
-~ next_chapter = 4
-Chapter three is done. #scene: save
-+ [·] -> mill
 
 === start_mill ===
 // Entry point for "jump to chapter four" on the title screen.

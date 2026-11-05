@@ -57,7 +57,8 @@ export const SPECIES: Record<string, Species> = {
 type Extra =
   | "satchel" | "scarf" | "clipboard" | "apron" | "cap" | "toque" | "bow" | "shawl" | "cane" | "flower" | "glasses"
   | "lapels" | "pearls" | "pillbox" | "oilskin" | "souwester" | "cardigan" | "cape" | "nursecap"
-  | "dress" | "overalls" | "sweater" | "hoodie" | "beanie" | "sunhat" | "flowercrown" | "bowtie";
+  | "dress" | "overalls" | "sweater" | "hoodie" | "beanie" | "sunhat" | "flowercrown" | "bowtie"
+  | "leafcrown" | "fishinghat" | "mushroomcap" | "leafcape";
 
 export interface Look {
   /** Overrides the species' fur colors (customization). */
@@ -550,6 +551,19 @@ export function lookMarkup(look: Look, own: Face, expr: Expression, opts: DrawOp
     s += `<circle cx="${f(-bw * 0.13)}" cy="${f(top + bh * 0.4)}" r="${f(1.8 * Math.max(k, 0.8))}" fill="#e6e8ec" stroke="#8e96a3" stroke-width=".6"/>`;
     s += `<path d="M${f(-bw * 0.42)} ${f(top + 1)} Q0 ${f(top + 4)} ${f(bw * 0.42)} ${f(top + 1)}" fill="none" stroke="#fbfcfe" stroke-width="${f(2 * Math.max(k, 0.8))}" stroke-linecap="round"/>`;
   }
+  if (has("leafcape")) {
+    // Overlapping leaves over the shoulders, stitched to a green cape.
+    const greens = ["#7fb86a", "#5f9a58", "#94c67a"];
+    const lw = 2.6 * Math.max(k, 0.8);
+    for (const d of [-1, 1]) {
+      s += `<path d="M${f(d * bw * 0.08)} ${f(top - 1)} Q${f(d * bw * 0.7)} ${f(top - 2)} ${f(d * bw * 0.66)} ${f(top + bh * 0.66)} Q${f(d * bw * 0.4)} ${f(top + bh * 0.74)} ${f(d * bw * 0.2)} ${f(top + bh * 0.56)} Z" fill="#5f9a58"/>`;
+      for (let row = 0; row < 3; row++) for (let i = 0; i < 3; i++) {
+        const x = d * bw * (0.24 + i * 0.15);
+        const y = top + bh * (0.08 + row * 0.2) + (i % 2) * 2;
+        s += `<ellipse cx="${f(x)}" cy="${f(y)}" rx="${f(lw * 0.72)}" ry="${f(lw * 1.25)}" transform="rotate(${f(d * 22)} ${f(x)} ${f(y)})" fill="${greens[(row + i) % 3]}"/>`;
+      }
+    }
+  }
   if (has("pearls")) {
     for (let i = 0; i <= 8; i++) {
       const t = i / 8;
@@ -663,6 +677,33 @@ export function lookMarkup(look: Look, own: Face, expr: Expression, opts: DrawOp
     s += `<ellipse cx="0" cy="${f(hy - R * 0.62)}" rx="${f(R * 1.5)}" ry="${f(R * 0.3)}" fill="#ecc97a"/>`;
     s += `<path d="M${f(-R * 0.7)} ${f(hy - R * 0.66)} Q${f(-R * 0.66)} ${f(hy - R * 1.36)} 0 ${f(hy - R * 1.36)} Q${f(R * 0.66)} ${f(hy - R * 1.36)} ${f(R * 0.7)} ${f(hy - R * 0.66)} Z" fill="#f3d88f"/>`;
     s += `<path d="M${f(-R * 0.69)} ${f(hy - R * 0.8)} Q0 ${f(hy - R * 0.9)} ${f(R * 0.69)} ${f(hy - R * 0.8)}" fill="none" stroke="${look.hat ?? look.accent}" stroke-width="${f(R * 0.16)}"/>`;
+  }
+  if (has("fishinghat")) {
+    // A soft bucket hat with a feather fly pinned to the band.
+    s += `<path d="M${f(-R * 1.16)} ${f(hy - R * 0.5)} L${f(-R * 0.82)} ${f(hy - R * 0.78)} L${f(R * 0.82)} ${f(hy - R * 0.78)} L${f(R * 1.16)} ${f(hy - R * 0.5)} Q0 ${f(hy - R * 0.68)} ${f(-R * 1.16)} ${f(hy - R * 0.5)} Z" fill="#8a9a6a"/>`;
+    s += `<path d="M${f(-R * 0.76)} ${f(hy - R * 0.72)} Q${f(-R * 0.68)} ${f(hy - R * 1.32)} 0 ${f(hy - R * 1.32)} Q${f(R * 0.68)} ${f(hy - R * 1.32)} ${f(R * 0.76)} ${f(hy - R * 0.72)} Z" fill="#a3b27e"/>`;
+    s += `<path d="M${f(-R * 0.75)} ${f(hy - R * 0.84)} Q0 ${f(hy - R * 0.96)} ${f(R * 0.75)} ${f(hy - R * 0.84)}" fill="none" stroke="#6f7f52" stroke-width="${f(R * 0.11)}"/>`;
+    s += `<path d="M${f(R * 0.34)} ${f(hy - R * 0.92)} q${f(R * 0.14)} ${f(-R * 0.26)} ${f(R * 0.3)} ${f(-R * 0.3)} q${f(-R * 0.02)} ${f(R * 0.2)} ${f(-R * 0.3)} ${f(R * 0.3)} Z" fill="#e9705a"/>`;
+  }
+  if (has("mushroomcap")) {
+    // A red mushroom cap with white spots, sat right down over the crown.
+    s += `<path d="M${f(-R * 1.26)} ${f(hy - R * 0.5)} Q${f(-R * 1.18)} ${f(hy - R * 1.46)} 0 ${f(hy - R * 1.46)} Q${f(R * 1.18)} ${f(hy - R * 1.46)} ${f(R * 1.26)} ${f(hy - R * 0.5)} Q0 ${f(hy - R * 0.74)} ${f(-R * 1.26)} ${f(hy - R * 0.5)} Z" fill="#d9574a"/>`;
+    s += `<path d="M${f(-R * 1.2)} ${f(hy - R * 0.52)} Q0 ${f(hy - R * 0.74)} ${f(R * 1.2)} ${f(hy - R * 0.52)}" fill="none" stroke="#f6efe2" stroke-width="${f(R * 0.09)}" stroke-linecap="round"/>`;
+    for (const [x, y, r] of [[-0.62, 0.92, 0.17], [0.04, 1.2, 0.2], [0.66, 0.96, 0.15], [-0.2, 0.84, 0.1], [0.32, 0.8, 0.09]]) s += `<circle cx="${f(R * x)}" cy="${f(hy - R * y)}" r="${f(R * r)}" fill="#fff6ea"/>`;
+  }
+  if (has("leafcrown")) {
+    // A ring of green and gold leaves across the crown.
+    const cols = ["#7fb86a", "#a9c96a", "#5f9a58", "#e2b24f"];
+    const n = 11;
+    for (let i = 0; i < n; i++) {
+      const t = i / (n - 1);
+      const a = Math.PI * (1.15 + t * 0.7);
+      const cx = Math.cos(a) * hw * 0.86;
+      const cy = hy - R * 0.08 + Math.sin(a) * hh * 0.88;
+      const rot = f((t - 0.5) * 130 + (i % 2 ? 28 : -28));
+      s += `<ellipse cx="${f(cx)}" cy="${f(cy)}" rx="${f(R * 0.11)}" ry="${f(R * 0.22)}" transform="rotate(${rot} ${f(cx)} ${f(cy)})" fill="${cols[i % 4]}"/>`;
+      s += `<path d="M${f(cx)} ${f(cy - R * 0.16)} L${f(cx)} ${f(cy + R * 0.16)}" transform="rotate(${rot} ${f(cx)} ${f(cy)})" stroke="#000" stroke-opacity=".14" stroke-width="${f(R * 0.02)}"/>`;
+    }
   }
   if (has("flowercrown")) {
     // A ring of small five-petal flowers set close together over the crown, with leaves tucked between.

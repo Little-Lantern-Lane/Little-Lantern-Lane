@@ -13,6 +13,8 @@ export interface Hud {
   controls(mode: "walk" | "approach" | "hang" | "tide" | "hidden"): void;
   onHeadUp(handler: (on: boolean) => void): void;
   toast(node: HTMLElement, ms?: number): void;
+  /** The buttons that turn the camera, shown in the woods. */
+  showTurn(on: boolean, turn?: (by: number) => void): void;
 }
 
 export function createHud(root: HTMLElement, sound: Sound, touch: boolean): Hud {
@@ -23,6 +25,7 @@ export function createHud(root: HTMLElement, sound: Sound, touch: boolean): Hud 
     <button class="hud-headup" hidden>Head up</button>
     <button class="hud-action" hidden></button>
     <button class="hud-fullscreen" hidden>Full screen</button>
+    <div class="hud-turn" hidden><button aria-label="Turn camera left">⟲</button><span>Q · R</span><button aria-label="Turn camera right">⟳</button></div>
     <button class="hud-sound" aria-label="Sound"></button>
     <div class="hud-toast" aria-live="polite"></div>`;
   const next = root.querySelector<HTMLElement>(".hud-next")!;
@@ -33,6 +36,11 @@ export function createHud(root: HTMLElement, sound: Sound, touch: boolean): Hud 
   const toastEl = root.querySelector<HTMLElement>(".hud-toast")!;
   const action = root.querySelector<HTMLButtonElement>(".hud-action")!;
   const fullscreen = root.querySelector<HTMLButtonElement>(".hud-fullscreen")!;
+  const turnBox = root.querySelector<HTMLElement>(".hud-turn")!;
+  let turner: (by: number) => void = () => {};
+  const [turnLeft, turnRight] = turnBox.querySelectorAll("button");
+  turnLeft.addEventListener("click", () => turner(-Math.PI / 4));
+  turnRight.addEventListener("click", () => turner(Math.PI / 4));
   let headUpHandler: (on: boolean) => void = () => {};
   let actionRun: (() => void) | null = null;
   action.addEventListener("click", () => {
@@ -124,6 +132,10 @@ export function createHud(root: HTMLElement, sound: Sound, touch: boolean): Hud 
     },
     onHeadUp(handler) {
       headUpHandler = handler;
+    },
+    showTurn(on, turn) {
+      turnBox.hidden = !on;
+      if (turn) turner = turn;
     },
     toast(node, ms = 6000) {
       toastEl.replaceChildren(node);

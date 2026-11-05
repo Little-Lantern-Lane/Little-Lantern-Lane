@@ -4,11 +4,12 @@
 
 import type { GameState } from "./logic/state";
 import type { Variant } from "./logic/facts";
-import { normalizeCharacter, normalizeHome, type CharacterChoice, type HomeChoice } from "./logic/appearance";
+import { normalizeBag } from "./logic/bag";
+import { BOUGHT_CLOTHES, normalizeCharacter, normalizeHome, type CharacterChoice, type HomeChoice } from "./logic/appearance";
 
 const KEY = "lantern-night:save";
-export type SaveChapter = 2 | 3 | 4 | 5 | 6;
-const CHAPTERS: readonly number[] = [2, 3, 4, 5, 6];
+export type SaveChapter = 2 | 3 | 4 | 5 | 6 | 7;
+const CHAPTERS: readonly number[] = [2, 3, 4, 5, 6, 7];
 const VERSION = 1;
 
 export interface SaveGame {
@@ -52,7 +53,7 @@ export function readSave(store: Storage | null = storage()): SaveGame | null {
     const save = JSON.parse(raw) as SaveGame;
     // A save from an older build may not match the story any more; ignore it.
     if (save.version !== VERSION || !CHAPTERS.includes(save.chapter) || typeof save.story !== "string") return null;
-    return save;
+    return { ...save, game: { ...save.game, bag: normalizeBag(save.game.bag) } };
   } catch {
     return null;
   }
@@ -72,6 +73,7 @@ export const CHAPTER_NAMES: Record<SaveGame["chapter"], string> = {
   4: "chapter four: Opening day",
   5: "chapter five: The first snow",
   6: "chapter six: The tide",
+  7: "the week after: The far bank",
 };
 
 // --- Your look and your home --------------------------------------------------------
@@ -82,6 +84,8 @@ const LOOKS_KEY = "lantern-night:looks";
 export interface Looks {
   character: CharacterChoice;
   home: HomeChoice;
+  /** Clothes bought from Nell, kept across games like the rest of your look. */
+  owned: string[];
 }
 
 export function writeLooks(looks: Looks, store: Storage | null = storage()): boolean {
@@ -101,7 +105,8 @@ export function readLooks(store: Storage | null = storage()): Looks | null {
     const raw = store.getItem(LOOKS_KEY);
     if (!raw) return null;
     const data = JSON.parse(raw) as Partial<Looks>;
-    return { character: normalizeCharacter(data.character), home: normalizeHome(data.home) };
+    const owned = Array.isArray(data.owned) ? data.owned.filter((id) => BOUGHT_CLOTHES.includes(id)) : [];
+    return { character: normalizeCharacter(data.character), home: normalizeHome(data.home), owned };
   } catch {
     return null;
   }

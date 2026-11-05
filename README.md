@@ -12,6 +12,12 @@ It is not therapy and not a crisis resource.
 
 Then open http://localhost:8140. Tests: `npm test`. Types: `npm run typecheck`.
 
+## The far bank
+
+Between chapters three and four there's a week with nothing wrong in it: woods past Lantern Lane, a river, a bridge
+to mend, and a second forest over it. Gather fruit, mushrooms and stones, fish, make things at your table, sell to
+villagers, give gifts, and buy clothes and things for your house. Jump to it from the title screen.
+
 ## How it is built
 
 | Part | Where | What it does |

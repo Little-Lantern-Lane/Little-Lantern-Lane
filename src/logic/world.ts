@@ -13,7 +13,7 @@ export type TimeOfDay = "afternoon" | "sunset" | "night" | "morning";
 
 export interface WorldState {
   time: TimeOfDay;
-  location: "square" | "edge" | "cave" | "lane" | "home" | "mill" | "coast" | "shed";
+  location: "square" | "edge" | "cave" | "lane" | "home" | "mill" | "coast" | "shed" | "bridge";
   form: "person" | "shell";
   posture: "upright" | "neutral" | "slumped";
   faceHot: boolean;
@@ -35,7 +35,7 @@ export interface WorldState {
   pull: boolean;
   /** Carrying Ash's candle jar: dark lanes can be walked. */
   hasLight: boolean;
-  /** Chapter: 1 the fall, 2 the morning after, 3 the storm, 4 opening day, 5 the first snow, 6 the tide. */
+  /** Chapter: 1 the fall, 2 the morning after, 3 the storm, 4 opening day, 5 the first snow, 6 the tide. 7 is the week between three and four, the far bank. */
   level: Level;
   weather: "clear" | "storm" | "snow";
   /** Scenery that comes and goes with the story (names of PROPS in layout.ts). */
@@ -49,9 +49,9 @@ export interface WorldState {
   ended: boolean;
 }
 
-export type Level = 1 | 2 | 3 | 4 | 5 | 6;
-export const LEVELS: readonly Level[] = [1, 2, 3, 4, 5, 6];
-const LOCATIONS: readonly WorldState["location"][] = ["square", "edge", "cave", "lane", "home", "mill", "coast", "shed"];
+export type Level = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+export const LEVELS: readonly Level[] = [1, 2, 3, 4, 5, 6, 7];
+const LOCATIONS: readonly WorldState["location"][] = ["square", "edge", "cave", "lane", "home", "mill", "coast", "shed", "bridge"];
 
 /** Where each later chapter starts, and what time and weather it is. */
 const CHAPTER_START: Record<Exclude<Level, 1>, Pick<WorldState, "location" | "time" | "weather">> = {
@@ -60,6 +60,7 @@ const CHAPTER_START: Record<Exclude<Level, 1>, Pick<WorldState, "location" | "ti
   4: { location: "mill", time: "morning", weather: "clear" },
   5: { location: "lane", time: "sunset", weather: "snow" },
   6: { location: "coast", time: "afternoon", weather: "clear" },
+  7: { location: "lane", time: "morning", weather: "clear" },
 };
 
 export function initialWorld(): WorldState {
@@ -97,6 +98,8 @@ const RIPPLE: Record<Completeness, (w: WorldState) => Partial<WorldState>> = {
   minimal: (w) => ({ squareLight: 0.6, darkness: w.darkness }),
 };
 
+const LASTING_PROPS = ["bridge", "bridge_lantern"];
+
 const INVITES: readonly WorldState["invitation"][] = ["none", "missing", "pending", "received"];
 
 export const WORLD_EVENTS = new Set([
@@ -127,6 +130,7 @@ export const WORLD_EVENTS = new Set([
   "end",
   "chapter",
   "sunset",
+  "unplace",
   "rest",
   "storm",
   "wave",
@@ -216,12 +220,13 @@ export function applyWorldEvent(w: WorldState, ev: GameEvent): WorldState {
         form: "person",
         faceHot: false,
         posture: "neutral",
-        lanterns: level >= 5 ? "workshop" : "hung",
+        lanterns: level === 5 || level === 6 ? "workshop" : "hung",
         lanternsHung: w.lanternsHung || 12,
         hasLight: false,
         darkness: 0,
         panic: false,
-        props: [],
+        // What you built on the river stays built.
+        props: w.props.filter((p) => LASTING_PROPS.includes(p)),
         placed: {},
         faces: {},
         ...CHAPTER_START[level],
@@ -241,6 +246,12 @@ export function applyWorldEvent(w: WorldState, ev: GameEvent): WorldState {
       const x = where === "off" ? null : Number(where);
       if (x !== null && !Number.isFinite(x)) throw new Error(`Bad place: ${ev.arg}`);
       return { ...w, placed: { ...w.placed, [id]: x } };
+    }
+    case "unplace": {
+      // Back to wherever they usually stand now.
+      if (!ev.arg || !isCharacterId(ev.arg)) throw new Error(`unplace needs a character, got ${ev.arg}`);
+      const { [ev.arg]: _gone, ...rest } = w.placed;
+      return { ...w, placed: rest };
     }
     case "go": {
       if (!LOCATIONS.includes(ev.arg as WorldState["location"])) throw new Error(`Unknown place to go: ${ev.arg}`);

@@ -1,6 +1,7 @@
 // The village as data: areas, ground height, places you can walk into, things
 // you can use, and where everyone stands. No Phaser here, so it can be tested.
 
+import type { ItemId, Tool } from "../logic/bag";
 import type { CharacterId } from "../logic/cast";
 import type { WorldState } from "../logic/world";
 
@@ -15,7 +16,7 @@ export const HOME_DOOR = 740;
 export const INTERIOR = { x0: 4800, x1: 6080 };
 
 export interface Area {
-  id: "lane" | "street" | "square" | "hill" | "workshop" | "home" | "millpath" | "teashop" | "quay" | "shore";
+  id: "lane" | "street" | "square" | "hill" | "workshop" | "home" | "millpath" | "teashop" | "quay" | "shore" | "wood" | "river" | "farbank" | "bedroom" | "sitting" | "cellar";
   name: string;
   x0: number;
   x1: number;
@@ -35,10 +36,44 @@ export const AREAS: Area[] = [
   // Chapter six: Saltmouth, Tobin's home town on the coast.
   { id: "quay", name: "Saltmouth Harbour", x0: 11000, x1: 12400 },
   { id: "shore", name: "Hesketh's Shed", x0: 12400, x1: 13800 },
+  // The week after the storm: the woods past Lantern Lane, the river, and the far bank.
+  { id: "wood", name: "Hazel Wood", x0: 14200, x1: 17000 },
+  { id: "river", name: "The River", x0: 17000, x1: 17440 },
+  { id: "farbank", name: "The Far Bank", x0: 17440, x1: 20200 },
+  // The rooms your home can grow.
+  { id: "bedroom", name: "Your bedroom", x0: 20600, x1: 21500 },
+  { id: "sitting", name: "The side room", x0: 21700, x1: 22600 },
+  { id: "cellar", name: "The cellar", x0: 22800, x1: 23700 },
 ];
+
+/** The woods: you walk east from the gate. The river runs across your way; the bridge is the only crossing. */
+export const WOODS = { x0: 14200, x1: 20200, gate: 14290, stall: 14440, stallZ: 2.6, river0: 17000, river1: 17440, bridgeHalf: 1.2, band: 46 };
+const RIVER_MID = (WOODS.river0 + WOODS.river1) / 2;
+const RIVER_HALF = (WOODS.river1 - WOODS.river0) / 2;
+
+/** The river's middle at depth z: straight at the bridge, wandering away from it. */
+export function riverMidX(z: number): number {
+  const a = Math.abs(z);
+  const t = Math.min(1, Math.max(0, (a - 6) / 34));
+  return RIVER_MID + Math.sign(z || 1) * 300 * t * t * (3 - 2 * t) + Math.sin(z * 0.11) * t * 70;
+}
+
+/** Which side of the river you're on, or in it. */
+export function bankAt(x: number, z: number): "wood" | "river" | "farbank" {
+  const off = x - riverMidX(z);
+  return off < -RIVER_HALF ? "wood" : off > RIVER_HALF ? "farbank" : "river";
+}
+
+/** The gate at the end of Lantern Lane that leads to the woods. */
+export const LANE_GATE = 110;
 
 export function areaAt(x: number): Area {
   return AREAS.find((a) => x >= a.x0 && x < a.x1) ?? AREAS[0];
+}
+
+/** The woods are a wide place, not a path, so where you are depends on which side of the river you're on. */
+export function woodsAreaAt(x: number, z: number): Area {
+  return AREAS.find((a) => a.id === bankAt(x, z))!;
 }
 
 /** Separate places you can't walk between: each has its own camera bounds and walking limits. */
@@ -48,6 +83,10 @@ export const REGIONS = [
   { id: "home", x0: 6400, x1: 7680, min: 6440, max: 7640 },
   { id: "mill", x0: 8000, x1: 10400, min: 8060, max: 10340 },
   { id: "coast", x0: 11000, x1: 13800, min: 11060, max: 13740 },
+  { id: "woods", x0: 14200, x1: 20200, min: 14260, max: 20140 },
+  { id: "bedroom", x0: 20600, x1: 21500, min: 20640, max: 21460 },
+  { id: "sitting", x0: 21700, x1: 22600, min: 21740, max: 22560 },
+  { id: "cellar", x0: 22800, x1: 23700, min: 22840, max: 23660 },
 ] as const;
 export type Region = (typeof REGIONS)[number];
 
@@ -110,21 +149,107 @@ const snowNight = (w: WorldState) => w.level === 5 && w.time === "night";
  */
 export function canEnterHome(w: WorldState): boolean {
   if (snowNight(w)) return true;
-  return w.level <= 3 && w.form === "person" && !w.pull && !laneBlocked(w);
+  return (w.level <= 3 || w.level === 7) && w.form === "person" && !w.pull && !laneBlocked(w);
 }
 
 /** Wider than the way in, so nothing can shut you inside. */
 export function canLeaveHome(w: WorldState): boolean {
-  return snowNight(w) || w.level <= 3;
+  return snowNight(w) || w.level <= 3 || w.level === 7;
 }
 
-/** Doors between places. `when` limits a door to when it can be used; `toZ` is where you land across the path. */
-export const DOORS: { x: number; to: number; toZ?: number; label: string; when?: (w: WorldState) => boolean }[] = [
+/** Paths to the woods from the two chapters that don't happen in the village. */
+export const MILL_PATH = 8270;
+export const COAST_PATH = 11190;
+
+/**
+ * The woods are open from every chapter, whenever you're free to wander. Not during the moments the
+ * story needs you for: the pull to hide, the shell, the storm's panic or weather, or the snowy night,
+ * when Pip and Juno are in your house.
+ */
+export function canVisitWoods(w: WorldState): boolean {
+  if (w.form !== "person" || w.pull || w.panic || w.weather === "storm" || w.ended || laneBlocked(w)) return false;
+  return !(w.level === 5 && w.time === "night");
+}
+
+const inVillageChapter = (w: WorldState) => w.level !== 4 && w.level !== 6;
+
+/** Doors between places. `when` limits a door to when it can be used; `z` is where it stands if not the back of the path; `toZ` is where you land. */
+export const DOORS: { x: number; z?: number; to: number; toZ?: number; label: string; when?: (w: WorldState) => boolean; needs?: "bedroom" | "sitting" | "cellar" }[] = [
   { x: 1650, to: 5210, label: "Go into the workshop" },
   { x: 5170, to: 1650, label: "Go out to Market Street" },
   { x: HOME_DOOR, to: 6510, toZ: -1.4, label: "Go into your house", when: canEnterHome },
   { x: 6470, to: HOME_DOOR, toZ: -3.1, label: "Go out to Lantern Lane", when: canLeaveHome },
+  // Rooms your home has grown. The stairs, a door in the end wall, and a hatch in the floor.
+  { x: 7040, z: -1.6, to: 20720, toZ: -1, label: "Go upstairs", needs: "bedroom" },
+  { x: 20680, to: 7040, toZ: -1.4, label: "Go downstairs" },
+  { x: 7620, z: 0.9, to: 21820, toZ: -1, label: "Go into the side room", needs: "sitting" },
+  { x: 21780, to: 7560, toZ: 0.9, label: "Go back to the main room" },
+  { x: 6560, z: 1.7, to: 22920, toZ: -1, label: "Go down to the cellar", needs: "cellar" },
+  { x: 22880, to: 6620, toZ: 1.7, label: "Go back up" },
+  { x: LANE_GATE, to: WOODS.gate + 70, toZ: 0, label: "Go through to the woods", when: (w) => inVillageChapter(w) && canVisitWoods(w) },
+  { x: MILL_PATH, to: WOODS.gate + 70, toZ: 0, label: "Take the path to the woods", when: (w) => w.level === 4 && canVisitWoods(w) },
+  { x: COAST_PATH, to: WOODS.gate + 70, toZ: 0, label: "Take the road to the woods", when: (w) => w.level === 6 && canVisitWoods(w) },
+  // The way back goes wherever the chapter is, and is never shut.
+  { x: WOODS.gate, z: -1.4, to: LANE_GATE + 60, toZ: -1, label: "Go back to Lantern Lane", when: inVillageChapter },
+  { x: WOODS.gate, z: -1.4, to: MILL_PATH + 40, toZ: 0, label: "Go back to the mill", when: (w) => w.level === 4 },
+  { x: WOODS.gate, z: -1.4, to: COAST_PATH + 40, toZ: 0, label: "Go back to the harbour", when: (w) => w.level === 6 },
 ];
+
+/** One thing growing or lying in the woods. `shape` says how the woods draw it. */
+export interface GatherNode {
+  id: string;
+  item: ItemId;
+  x: number;
+  z: number;
+  shape: "tree" | "bramble" | "cap" | "rock" | "log" | "birch";
+  tool?: Tool;
+}
+
+const DEEP = 4.7; // the lists below were laid out narrow; this spreads them through the whole wood
+
+const near = (item: ItemId, shape: GatherNode["shape"], spots: [number, number][], tool?: Tool): GatherNode[] =>
+  spots.map(([x, depth], i) => {
+    const z = depth * DEEP;
+    // Keep everything on its own bank, however the river wanders.
+    const mid = riverMidX(z);
+    const safe = x < RIVER_MID ? Math.min(x, mid - RIVER_HALF - 130) : Math.max(x, mid + RIVER_HALF + 130);
+    return { id: `${item}${i}`, item, x: safe, z, shape, tool };
+  });
+
+export const NODES: GatherNode[] = [
+  // Hazel Wood: everyday things.
+  ...near("apple", "tree", [[14720, -4.5], [15050, 3.6], [15420, -6.2], [15980, 5], [15080, -7.4], [15560, -7.8]]),
+  ...near("blackberry", "bramble", [[14560, 3], [14980, -3], [15360, 4.8], [16160, -3.6], [15700, 8]]),
+  ...near("button_cap", "cap", [[14860, 1.8], [15230, -2], [15640, 2.6], [16300, 1.4], [14700, 7]]),
+  ...near("chanterelle", "cap", [[15560, -5.4], [16080, -6.6], [16520, 4.4], [15940, 8.6]]),
+  ...near("birch_bark", "birch", [[14640, -6.6], [15760, 6.4], [16420, -6], [15180, 8.4]]),
+  ...near("driftwood", "log", [[16760, -1], [16860, 0.8], [16620, 1.6], [16920, -0.7], [16700, 0.5], [16900, 1.5], [16800, -1.8], [16560, -0.6]]),
+  ...near("quartz", "rock", [[16660, 7.6], [16480, -7.6]], "hammer"),
+  ...near("ironstone", "rock", [[15860, -3.2], [16240, 6.8], [15480, 7]], "hammer"),
+  // The far bank: rarer things, and a different light.
+  ...near("plum", "tree", [[17760, 4.6], [18340, -5.2], [19020, 5.4], [18800, -8]]),
+  ...near("moonberry", "bramble", [[17900, -3.6], [18620, 3.2], [19360, -4.4], [19100, 8.2]]),
+  ...near("bluecap", "cap", [[17680, -5.6], [18180, 2.2], [18820, -2.4], [19520, 2.8]]),
+  ...near("glowcap", "cap", [[18480, -6.8], [19180, 6.8], [19820, -1.6], [18100, 8.2]]),
+  ...near("copper", "rock", [[18060, 6.6], [18920, -6.8], [19660, 6]], "hammer"),
+  ...near("skyglass", "rock", [[19280, -7.2], [19940, 3.6]], "hammer"),
+  ...near("birch_bark", "birch", [[18260, 7.2], [19740, -6.8]]).map((n) => ({ ...n, id: `far_${n.id}` })),
+];
+
+/** Where you can fish. The two banks hold different fish. */
+export const FISHING_SPOTS = ([[-30, "near"], [-9, "near"], [20, "near"], [-22, "far"], [9, "far"], [34, "far"]] as const).map(([z, bank], i) => {
+  const mid = riverMidX(z);
+  const dir = bank === "near" ? -1 : 1;
+  return { id: `fish${i}`, x: mid + dir * (RIVER_HALF + 40), z, floatX: mid + dir * 50, floatZ: z + 0.4, bank };
+});
+
+/** You can't step into the river. Only the bridge, once it's built, gets you across. */
+export function woodsLimit(x: number, z: number, bridge: boolean): number {
+  if (bridge && Math.abs(z) <= WOODS.bridgeHalf) return x;
+  const mid = riverMidX(z);
+  if (Math.abs(x - mid) >= RIVER_HALF) return x;
+  return x < mid ? mid - RIVER_HALF : mid + RIVER_HALF;
+}
 
 export const FOUNTAIN_X = 2550;
 export const EDGE_X = 3080;
@@ -141,9 +266,10 @@ export const POLES = [2180, 2920];
 
 export type Phase =
   | "afternoon" | "after" | "night" | "festival" | "approach" | "day2" | "storm"
-  | "mill_morning" | "mill_party" | "snow_evening" | "snow_night" | "snow_dawn" | "coast" | "coast_dusk";
+  | "mill_morning" | "mill_party" | "snow_evening" | "snow_night" | "snow_dawn" | "coast" | "coast_dusk" | "woods";
 
 export function phaseOf(w: WorldState, approaching: boolean): Phase {
+  if (w.level === 7) return "woods";
   if (w.level === 4) return w.time === "night" ? "mill_party" : "mill_morning";
   if (w.level === 5) return w.time === "morning" ? "snow_dawn" : w.time === "night" ? "snow_night" : "snow_evening";
   if (w.level === 6) return w.time === "sunset" || w.time === "night" ? "coast_dusk" : "coast";
@@ -178,6 +304,8 @@ export const NPC_SPOTS: Record<Phase, Spots> = {
   // Chapter six: Fen on the quay, Hesketh at his shed.
   coast: { fen: 11500, tobin: 11640, hesketh: 12620 },
   coast_dusk: { fen: 11860, tobin: 11960, hesketh: 12240 },
+  // The week after the storm: Mara and Nell at the river, the kids in the wood, everyone else at work.
+  woods: { mara: 16700, nell: 16880, pip: 15000, juno: 15060, ash: 1880, wren: 1240, oda: 1300, tobin: 1760 },
 };
 
 /** Where the player stands when the story moves them. */
@@ -190,6 +318,7 @@ export const PLAYER_SPOTS: Record<WorldState["location"], number> = {
   mill: 8200,
   coast: 11200,
   shed: 12700,
+  bridge: 17220,
 };
 
 /**

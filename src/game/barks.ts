@@ -114,6 +114,7 @@ const FREED_BY: Partial<Record<Npc, HotspotId>> = {
 /** Which set of remarks fits the moment, or null when nobody should chat (storm, night, hiding). */
 export function barkPhase(w: WorldState): BarkPhase | null {
   if (w.weather === "storm" || w.form === "shell" || w.ended) return null;
+  if (w.level === 7) return null;
   if (w.level === 4) return w.time === "night" ? "mill_party" : "mill_morning";
   if (w.level === 5) return w.time === "morning" ? "snow_dawn" : w.time === "night" ? null : "snow";
   if (w.level === 6) return w.time === "sunset" || w.time === "night" ? "coast_dusk" : "coast";

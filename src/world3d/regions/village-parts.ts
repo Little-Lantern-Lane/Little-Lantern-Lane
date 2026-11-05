@@ -359,6 +359,7 @@ interface Item {
   m: THREE.Matrix4;
   c: THREE.Color;
   x: number;
+  z: number;
 }
 
 const q = new THREE.Quaternion();
@@ -372,7 +373,7 @@ export class Scatter {
     const m = new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), q.setFromEuler(e.set(0, ry, rz)), new THREE.Vector3(sx, sy, sz));
     let list = this.items.get(kind);
     if (!list) this.items.set(kind, (list = []));
-    list.push({ m, c: new THREE.Color(color), x });
+    list.push({ m, c: new THREE.Color(color), x, z });
   }
 
   /** A leafy blob, with a white cap in snow. */
@@ -401,14 +402,15 @@ export class Scatter {
     });
   }
 
-  build(out: Parts, stretch = 26): void {
+  /** `deep` also splits by depth, for wide places, so what's out of view isn't drawn. */
+  build(out: Parts, stretch = 26, deep = 0): void {
     for (const [kind, items] of this.items) {
       const k = KINDS[kind];
       const geo = k.geo();
       const mat = soft("#ffffff", k.rough);
-      const groups = new Map<number, Item[]>();
+      const groups = new Map<string, Item[]>();
       for (const it of items) {
-        const key = Math.floor(it.x / stretch);
+        const key = `${Math.floor(it.x / stretch)}:${deep ? Math.floor(it.z / deep) : 0}`;
         const g = groups.get(key);
         if (g) g.push(it);
         else groups.set(key, [it]);

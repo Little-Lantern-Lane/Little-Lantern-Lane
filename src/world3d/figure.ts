@@ -492,6 +492,17 @@ export function makeFigure(id: CharacterId, start: Expression): Figure {
     body.add(ball(2, 2, 1, felt("#e6e8ec"), ...onBody(-bw * 0.08, by + 2, 0.6)));
     collar(felt("#fbfcfe"), 1.6);
   }
+  if (has("leafcape")) {
+    // A green cape over the shoulders, covered in overlapping leaves.
+    patch(felt("#5f9a58"), 2.65, 0.1, 1.75, 1.3, -Math.PI / 2);
+    const greens = ["#7fb86a", "#5f9a58", "#94c67a"].map(felt);
+    for (const d of [-1, 1]) for (let row = 0; row < 3; row++) for (let i = 0; i < 3; i++) {
+      const leaf = ball(2.1, 3, 0.7, greens[(row + i) % 3], ...onBody(d * bw * (0.3 + i * 0.13), by + 12 - row * 6, 1.4));
+      leaf.rotation.z = d * -0.35;
+      body.add(leaf);
+    }
+    collar(felt("#7fb86a"), 1.6);
+  }
   if (has("shawl")) {
     const m = felt(look.accent);
     patch(m, 3.14, 0.1, 1.35, 1.22);
@@ -650,6 +661,54 @@ export function makeFigure(id: CharacterId, start: Expression): Figure {
     const ribbon = shell(R * 0.945, R * 0.78, R * 0.945, felt(hatC), Math.PI, 1.05, Math.PI / 2);
     hat.add(crown, ribbon);
     head.add(hat);
+  }
+  if (has("fishinghat")) {
+    // A soft bucket hat with a feather fly in the band.
+    const hat = new THREE.Group();
+    hat.position.y = hh * 0.62;
+    hat.rotation.x = -0.14;
+    hat.add(ball(R * 1.18, R * 0.09, R * 1.18, felt("#8a9a6a")));
+    hat.add(shell(R * 0.9, R * 0.74, R * 0.9, felt("#a3b27e"), Math.PI, 0, Math.PI / 2));
+    hat.add(shell(R * 0.925, R * 0.76, R * 0.925, felt("#6f7f52"), Math.PI, 1.12, Math.PI / 2));
+    const fly = ball(R * 0.1, R * 0.2, R * 0.05, felt("#e9705a"), R * 0.5, R * 0.34, R * 0.76);
+    fly.rotation.z = -0.6;
+    hat.add(fly);
+    head.add(hat);
+  }
+  if (has("mushroomcap")) {
+    // A red mushroom cap with white spots, sat right down over the crown.
+    const hat = new THREE.Group();
+    hat.position.y = hh * 0.56;
+    hat.rotation.x = -0.12;
+    const [cw, ch] = [R * 1.32, R * 0.98];
+    hat.add(shell(cw, ch, cw, felt("#d9574a"), Math.PI, 0, Math.PI / 2));
+    hat.add(ball(cw * 0.99, R * 0.08, cw * 0.99, felt("#f6efe2")));
+    const spot = felt("#fff6ea");
+    for (const [a, h, r] of [[0.2, 0.45, 0.2], [1.5, 0.5, 0.17], [2.9, 0.42, 0.2], [4.3, 0.5, 0.18], [5.5, 0.4, 0.16], [0.9, 0.86, 0.17], [3.7, 0.84, 0.15]]) {
+      const k = Math.sqrt(1 - h * h);
+      hat.add(ball(R * r, R * r * 0.5, R * r, spot, Math.sin(a) * cw * k, ch * h, Math.cos(a) * cw * k));
+    }
+    head.add(hat);
+  }
+  if (has("leafcrown")) {
+    // A ring of green and gold leaves round the head.
+    const cols = ["#7fb86a", "#a9c96a", "#5f9a58", "#e2b24f"].map(felt);
+    const forward = new THREE.Vector3(0, 0, 1);
+    const n = 16;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      const y = hh * (0.58 + 0.08 * Math.cos(a));
+      const k = Math.sqrt(1 - (y / hh) ** 2);
+      const p = new THREE.Vector3(Math.sin(a) * hw * k, y, Math.cos(a) * hd * k);
+      const out = new THREE.Vector3(p.x / hw ** 2, p.y / hh ** 2, p.z / hd ** 2).normalize();
+      const g = new THREE.Group();
+      g.position.copy(p).addScaledVector(out, R * 0.05);
+      g.quaternion.setFromUnitVectors(forward, out);
+      const leaf = ball(R * 0.17, R * 0.32, R * 0.06, cols[i % 4]);
+      leaf.rotation.z = i % 2 ? 0.45 : -0.45;
+      g.add(leaf);
+      head.add(g);
+    }
   }
   if (has("flowercrown")) {
     // A ring of small five-petal flowers round the head, with leaves tucked between.

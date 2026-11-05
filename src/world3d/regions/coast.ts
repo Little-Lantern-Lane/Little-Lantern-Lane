@@ -3,12 +3,13 @@
 // which is why you can see in. The tide challenge moves the shelf items and floods the floor.
 
 import * as THREE from "three";
-import { GROUND_Y, PROPS, SHED, SHED_ITEMS, USABLES, VIEW_H } from "../../game/layout";
+import { COAST_PATH, GROUND_Y, PROPS, SHED, SHED_ITEMS, USABLES, VIEW_H } from "../../game/layout";
 import type { WorldState } from "../../logic/world";
 import {
   ball, BLOCK, boardCanvas, cyl, flat, flow, glowing, groundFrom, isEvening, lantern, LANTERN_COLOURS, many, noShadow, own, paint, paintPlanks, rbox, roof, seeded, setLit, soft, stoneWall, tree, waterSheet, type Lit, type Piece,
 } from "../kit";
 import { regionZ, SCALE, worldX as X } from "../space";
+import { woodsPost } from "./village";
 import type { Blocker, LightSpot, RegionKit } from "../types";
 
 const WOOD = "#9b6b43";
@@ -384,6 +385,7 @@ export function buildCoast(): RegionKit & { shedItem(id: string): THREE.Object3D
   group.add(g);
   const props: Record<string, THREE.Object3D> = {};
   const lit: Lit[] = [];
+  g.add(woodsPost(X(COAST_PATH), -3.2));
   const blockers: Blocker[] = [];
 
   // --- The sea, and the ground along the front of it ---------------------------------------------

@@ -2,13 +2,13 @@
 // x, along the path. Here x becomes a real spot: X runs along the path, Z runs across it (+Z toward
 // the camera), Y is up. The player and villagers can stand anywhere across the width of an area.
 
-import { groundY, GROUND_Y, HOME_DOOR, regionAt, type Region } from "../game/layout";
+import { groundY, GROUND_Y, HOME_DOOR, regionAt, WOODS, type Region } from "../game/layout";
 
 /** Game x units per world unit. */
 export const SCALE = 55;
 
 /** Each separate place sits far from the others, so only one is ever in view. */
-const REGION_Z: Record<Region["id"], number> = { village: 0, workshop: -400, home: -800, mill: -1200, coast: -1600 };
+const REGION_Z: Record<Region["id"], number> = { village: 0, workshop: -400, home: -800, mill: -1200, coast: -1600, woods: -2000, bedroom: -2400, sitting: -2800, cellar: -3200 };
 
 export const worldX = (x: number) => x / SCALE;
 export const gameX = (X: number) => X * SCALE;
@@ -27,7 +27,8 @@ const doorPath = (off: number) => 0.9 * Math.min(1, Math.max(0, (130 - off) / 90
 /** How far you can walk across the path at x, as [back, front] offsets. Wider in open places. */
 export function bandAt(x: number): [number, number] {
   const id = regionAt(x).id;
-  if (id === "workshop" || id === "home") return [-2.6, 2.4];
+  if (id === "workshop" || id === "home" || id === "bedroom" || id === "sitting" || id === "cellar") return [-2.6, 2.4];
+  if (id === "woods") return [-WOODS.band, WOODS.band];
   if (id === "mill") return x >= 9000 ? [-2.6, 2.4] : [-3.5, 3.5];
   if (id === "coast") return x >= 12900 ? [-2.4, 2.2] : [-3.5, 4];
   if (x >= 2050 && x < 3200) return [-6.5, 6.5]; // the Square

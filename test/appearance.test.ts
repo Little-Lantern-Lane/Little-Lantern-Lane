@@ -105,6 +105,11 @@ describe("your home", () => {
     expect(home.custom.wall).toBe(DEFAULT_HOME.custom.wall);
     expect(home.custom.door).toBe(DEFAULT_HOME.custom.door);
   });
+
+  it("a saved home keeps what you bought for it and drops what isn't real", () => {
+    expect(normalizeHome({ decor: ["fence", "moat", "ferns"] }).decor.sort()).toEqual(["fence", "ferns"]);
+    expect(normalizeHome({}).decor).toEqual([]);
+  });
 });
 
 describe("saving your look", () => {
@@ -116,7 +121,7 @@ describe("saving your look", () => {
   it("round-trips, and nothing saved means the player hasn't chosen yet", () => {
     const store = memory();
     expect(readLooks(store)).toBeNull();
-    const looks = { character: { ...DEFAULT_CHARACTER, animal: "fox" as const }, home: growRoom(DEFAULT_HOME) };
+    const looks = { character: { ...DEFAULT_CHARACTER, animal: "fox" as const }, home: growRoom(DEFAULT_HOME), owned: ["leafcrown"] };
     expect(writeLooks(looks, store)).toBe(true);
     expect(readLooks(store)).toEqual(looks);
   });

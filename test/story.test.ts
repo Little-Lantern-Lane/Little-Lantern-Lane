@@ -5,6 +5,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { Compiler } from "inkjs/full";
+import { initialBag, ITEM_IDS } from "../src/logic/bag";
 import { Engine, type StoryLine } from "../src/engine";
 import { applyEvent, initialState, type GameState } from "../src/logic/state";
 import type { Variant } from "../src/logic/facts";
@@ -95,8 +96,8 @@ function play(variant: Variant, picks: string[], answers: SceneAnswers, from?: s
       continue;
     }
     if (engine.ended) return run;
-    // Runs that only script the first three chapters stop where chapter four begins.
-    if (!queue.length && run.lines.some((l) => l.text === "Chapter four: Opening day.")) return run;
+    // Runs that only script the first three chapters stop where the next part begins.
+    if (!queue.length && run.lines.some((l) => l.text === "Chapter four: Opening day." || l.text === "The week after the storm.")) return run;
     const pick = queue.shift();
     if (pick === undefined) throw new Error(`Ran out of picks at: ${engine.choices.map((c) => c.text).join(" | ")}`);
     const choice = engine.choices.find((c) => c.text.toLowerCase().includes(pick.toLowerCase()));
@@ -131,7 +132,7 @@ describe("story: stay, the feeling doesn't fit, all the way back", () => {
 
   it("runs every challenge through the first three chapters", () => {
     expect(run.scenes).toEqual(["fit", "approach", "hang", "chain", "save", "checkin", "save", "breathe", "secure", "save"]);
-    expect(run.engine.getVar("next_chapter")).toBe(4);
+    expect(run.engine.getVar("next_chapter")).toBe(7);
   });
 
   it("the pull to hide lets go once you've chosen to stay", () => {
@@ -253,7 +254,8 @@ describe("story: random walks", () => {
     for (let i = 0; i < 300; i++) {
       const variant: Variant = i % 2 ? "main" : "promise";
       let state = initialState();
-      const engine = new Engine(json, variant, () => state.meter.distress);
+      // A full bag, so the week after the storm can finish.
+      const engine = new Engine(json, variant, () => state.meter.distress, () => ({ ...initialBag(), items: Object.fromEntries(ITEM_IDS.map((id) => [id, 9])) }));
       let steps = 0;
       while (!engine.ended) {
         if (++steps > 3000) throw new Error("walk did not end");
@@ -290,7 +292,7 @@ describe("story: random walks", () => {
       expect(state.world.ended).toBe(true);
       expect(["full", "partial", "minimal"]).toContain(engine.getVar("completeness"));
     }
-  }, 60_000);
+  }, 240_000);
 });
 
 describe("chapter two: resting on purpose", () => {
@@ -334,7 +336,7 @@ describe("save points", () => {
   it("each chapter boundary is a save point that names the chapter it leads into", () => {
     const run = playFrom("start_day_two", [...REST_WELL, ...STORM_CALM], { fit: false, guiltFits: false });
     expect(run.scenes.filter((s) => s === "save")).toHaveLength(2);
-    expect(run.engine.getVar("next_chapter")).toBe(4);
+    expect(run.engine.getVar("next_chapter")).toBe(7);
   });
 
   it("a saved story resumes at the start of the next chapter and plays to the end", () => {
@@ -434,5 +436,17 @@ describe("long chains", () => {
     const t = text(run);
     expect(t).toMatch(/getting up at three/);
     expect(t).toMatch(/I said yes/);
+  });
+});
+
+describe("rare choices", () => {
+  it("having noticed Wren's back, you can ask about it at the festival", () => {
+    const engine = new Engine(json, "main");
+    engine.setVar("wren_back", true);
+    engine.startAt("festival");
+    engine.continueBatch();
+    engine.choose(engine.choices.find((c) => /bakers/i.test(c.text))!.index);
+    engine.continueBatch();
+    expect(engine.choices.map((c) => c.text)).toContain("Ask Wren about her back");
   });
 });
