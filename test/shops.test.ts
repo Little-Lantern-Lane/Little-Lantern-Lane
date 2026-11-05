@@ -32,7 +32,7 @@ describe("shops", () => {
   it("Tobin's shop is one building with two storefronts, and he stands between the two sides", () => {
     const fronts = DOORS.filter((d) => regionAt(d.to).id === "workshop");
     expect(fronts).toHaveLength(2);
-    const [lanterns, furniture] = [5170, 5790];
+    const [lanterns, furniture] = [5170, 5700];
     expect(NPC_SPOTS.hub.tobin!).toBeGreaterThan(lanterns);
     expect(NPC_SPOTS.hub.tobin!).toBeLessThan(furniture);
   });

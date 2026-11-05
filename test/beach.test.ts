@@ -1,7 +1,7 @@
 // The beach: down from the Square, with its own fish and things to gather.
 
 import { describe, expect, it } from "vitest";
-import { BEACH, BEACH_NODES, BEACH_SPOTS, DOORS, regionAt } from "../src/game/layout";
+import { BEACH, BEACH_NODES, BEACH_SPOTS, distToTrail, DOORS, MAP_BOARDS, regionAt, TRAILS } from "../src/game/layout";
 import { fishFor, ITEMS, sellable, initialBag } from "../src/logic/bag";
 import { initialState } from "../src/logic/state";
 import type { WorldState } from "../src/logic/world";
@@ -39,6 +39,15 @@ describe("the beach", () => {
       expect(n.z).toBeGreaterThanOrEqual(water);
       expect(n.z).toBeLessThanOrEqual(back);
     }
+  });
+
+  it("keeps what you gather off the paths, and the map board off everything", () => {
+    for (const n of BEACH_NODES) {
+      expect(distToTrail(n.x, n.z, TRAILS.beachExit), n.id).toBeGreaterThan(2);
+      expect(distToTrail(n.x, n.z, TRAILS.shore), n.id).toBeGreaterThan(2);
+    }
+    const board = MAP_BOARDS.find((m) => regionAt(m.x).id === "beach")!;
+    for (const n of BEACH_NODES) expect(Math.hypot((n.x - board.x) / 55, n.z - board.z), n.id).toBeGreaterThan(2.5);
   });
 
   it("has things to gather without a tool, and fish of its own", () => {

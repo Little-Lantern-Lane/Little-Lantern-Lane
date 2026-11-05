@@ -187,7 +187,7 @@ export const BEACH = { x0: 24000, x1: 28400, arrive: 24640, gate: 24560, gateZ: 
 
 /** Street doors of the shops. */
 /** The bakery door on Market Street: bakery() draws it 1.7 along from the shop's middle at world x 23.2. */
-const BAKERY_DOOR_X = 1205;
+const BAKERY_DOOR_X = 1221;
 export const SHOP_DOORS = { bakery: BAKERY_DOOR_X, sewing: 300, furniture: 1724 };
 
 /** Every place you can walk to when you're free, with the sign that points the way. */
@@ -229,7 +229,7 @@ const endOf = (t: Trail) => ({ x: t[t.length - 1][0], z: t[t.length - 1][1] - (t
 
 /** Where the map stands in each place, and where it takes you. */
 export const MAP_BOARDS: { x: number; z: number }[] = [
-  { x: 2030, z: 5 }, { x: 860, z: 3.8 }, { x: 14420, z: -3.6 }, { x: 18000, z: 2.5 }, { x: 25060, z: 2.6 }, { x: 8380, z: -3 }, { x: 11240, z: 2.8 },
+  { x: 2030, z: 5 }, { x: 860, z: 3.8 }, { x: 14420, z: -3.6 }, { x: 18000, z: 2.5 }, { x: 25420, z: 4.6 }, { x: 8380, z: -3 }, { x: 11240, z: 2.8 },
 ];
 /** The signs that show the walking routes, in the village between stories. */
 export const WALK_SIGNS: { x: number; z: number; text: string; always?: boolean; only?: number }[] = [
@@ -290,8 +290,8 @@ export const DOORS: { x: number; z?: number; to: number; toZ?: number; label: st
   // Shops you can walk into when you're free.
   { x: SHOP_DOORS.bakery, to: 28940, toZ: -1, label: "Go into the bakery", when: free },
   { x: 28900, to: SHOP_DOORS.bakery, toZ: -1.6, label: "Go back to Market Street" },
-  { x: SHOP_DOORS.furniture, to: 5740, toZ: -0.6, label: "Go into the furniture shop", when: free },
-  { x: 5790, to: SHOP_DOORS.furniture, toZ: -1.6, label: "Go back to Market Street", when: free },
+  { x: SHOP_DOORS.furniture, to: 5700, toZ: -0.8, label: "Go into the furniture shop", when: free },
+  { x: 5700, to: SHOP_DOORS.furniture, toZ: -1.6, label: "Go back to Market Street", when: free },
   { x: SHOP_DOORS.sewing, to: 30040, toZ: -1, label: "Go into Nell's sewing room", when: free },
   { x: 30000, to: SHOP_DOORS.sewing, toZ: -1.6, label: "Go back to Lantern Lane" },
   // Rooms your home has grown. The stairs, a door in the end wall, and a hatch in the floor.
@@ -371,9 +371,9 @@ const sand = (item: ItemId, shape: GatherNode["shape"], spots: [number, number][
 export const BEACH_NODES: GatherNode[] = [
   ...sand("shell", "shell", [[24700, -6], [25300, -9], [25900, -5], [26400, -10], [27000, -7], [27600, -9], [28000, -4]]),
   ...sand("seaweed", "weed", [[24900, -11], [25600, -11.5], [26200, -7], [26900, -11], [27400, -12], [28100, -10]]),
-  ...sand("samphire", "grass", [[24600, 12], [25500, 14], [26300, 10], [27100, 15], [27900, 11]]),
+  ...sand("samphire", "grass", [[25100, 13], [25500, 14], [26300, 10], [27100, 15], [27400, 12]]),
   ...sand("seaglass", "rock", [[25100, 2], [26700, -2], [27800, 4]], "hammer"),
-  ...sand("driftwood", "log", [[25000, 6], [26100, 3], [27300, 8]]),
+  ...sand("driftwood", "log", [[25700, 3.4], [26100, 3], [27000, 3.6]]),
 ];
 
 /** The rocks and the end of the pier, for fishing the open sea. */

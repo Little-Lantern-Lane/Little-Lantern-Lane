@@ -449,8 +449,8 @@ export class World3D {
       // Sits over the Square's cobbles.
       const height = id === "village" ? (x: number, z: number) => groundAt(x, z) + 0.07 : () => 0.02;
       const sand = id === "beach";
-      const quay = id === "coast"; // paved, so it's a line of paler flagstones
-      this.kits[id].group.add(groundTrail(t, height, regionZ(t[0][0]), quay ? "#d8cfbc" : sand ? "#c4a26e" : "#b8915f", quay ? "#bdb29c" : sand ? "#a3845a" : "#967349"));
+      const road = id === "coast" || id === "mill"; // these already have a road to walk along
+      this.kits[id].group.add(groundTrail(t, height, regionZ(t[0][0]), sand ? "#c4a26e" : "#b8915f", sand ? "#a3845a" : "#967349", road));
     }
   }
 
@@ -1623,7 +1623,10 @@ export class World3D {
   private teleport(x: number, z?: number) {
     this.px = x;
     const [back, front] = bandAt(x);
-    this.pz = THREE.MathUtils.clamp(z ?? (x >= ZONES.hollow.x0 && x < ZONES.hollow.x1 ? VILLAGE_Z.hollow : 0.6), back, front);
+    const wanted = z ?? (x >= ZONES.hollow.x0 && x < ZONES.hollow.x1 ? VILLAGE_Z.hollow : 0.6);
+    // Arriving on a path can be past the usual edge of a place.
+    const onPath = DOORS.some((d) => d.trail && regionAt(d.x) === regionAt(x) && (!d.when || d.when(this.world)) && onTrail(x, wanted, d.trail));
+    this.pz = onPath ? wanted : THREE.MathUtils.clamp(wanted, back, front);
     this.moveTo = null;
     const region = regionAt(x);
     this.kits[region.id].group.visible = true;

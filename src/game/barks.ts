@@ -56,7 +56,7 @@ export const BARKS: Record<BarkPhase, Partial<Record<Npc, string[]>>> = {
     oda: ["Dry in here. Mostly."],
     tobin: ["The stone held!"],
     mara: ["We're all still here."],
-    pip: ["In, and slow out!"],
+    pip: ["I wasn't scared. Much."],
     juno: ["I counted the whole time."],
   },
   mill_morning: {
@@ -83,10 +83,10 @@ export const BARKS: Record<BarkPhase, Partial<Record<Npc, string[]>>> = {
     juno: ["Hundreds of flakes. Thousands."],
   },
   snow_dawn: {
-    nell: ["Look at that. Morning.", "Path's clear, thanks to someone."],
+    nell: ["Look at that. Morning.", "Mind the ice on the step."],
     hettie: ["I'm here. I'm here.", "Thank you. Thank you."],
     oda: ["Ovens are back on!"],
-    pip: ["MUM!", "We made SNOWFLAKES."],
+    pip: ["MUM!", "It SNOWED, Mum."],
     juno: ["Eleven hours. I counted."],
   },
   coast: {
@@ -96,7 +96,7 @@ export const BARKS: Record<BarkPhase, Partial<Record<Npc, string[]>>> = {
   },
   coast_dusk: {
     fen: ["Look at it, though. Look at it."],
-    tobin: ["First one from the old mould."],
+    tobin: ["First one we've made here."],
     hesketh: ["The sea takes. You make another."],
   },
 };

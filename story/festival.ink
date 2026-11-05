@@ -345,7 +345,7 @@ But is that what actually happened? Talk to people. Look around the fountain. Fi
 
 === fact_tobin ===
 ~ facts_seen++
-tobin/sad: Hey. I'm sorry I laughed. I went down on that same stone this morning. Took out a whole string of bunting.
+tobin/sad: Hey. I'm sorry I laughed. I went down on that same stone myself. Took out a whole string of bunting.
 tobin/embarrassed: I laugh when I'm nervous. It wasn't about you. #event: fact tobin
 ->->
 
@@ -483,7 +483,7 @@ Mara looks over. Tobin is next to her.
 = full
 mara/surprised: There you are! #event: settle full
 mara/worried: Are you okay? That looked like it hurt.
-tobin/sad: Sorry I laughed. I went down on that same stone this morning. Laughing is what I do instead of hiding.
+tobin/sad: Sorry I laughed. I went down on that same stone myself. Laughing is what I do instead of hiding.
 tobin/laugh: Mostly.
 { variant == "promise":
     Then Mara picks up her grandmother's lantern and turns it over.
@@ -561,7 +561,11 @@ Mara is by the fountain with the lanterns. Go to her. The pull to hide will drag
     ~ bailed = true
     -> hide
 }
-You're with Mara. #event: pull off
+{ reached:
+    You're with Mara. #event: pull off
+- else:
+    You stay where you are. Mara comes over to you instead. #event: pull off
+}
 + { variant == "promise" } ["I stacked your grandmother's lantern with the others to save a trip. It tore when I fell. I'm sorry."]
     ~ part_a = true
     Saying it out loud makes your face burn hotter. #event: oa_step
@@ -617,7 +621,11 @@ Afterward, you want to keep apologizing, just in case.
     #event: settle minimal
     Mara and Tobin hang the lanterns.
     { variant == "promise":
-        At sundown they're lit, the torn one too. #event: hang 12
+        { mended:
+            At sundown they're lit, the patched one too. #event: hang 12
+        - else:
+            At sundown they're lit, the torn one too. #event: hang 12
+        }
     - else:
         At sundown they're lit. #event: hang 12
     }
@@ -712,9 +720,9 @@ Talk to anyone you like. When you're ready, walk home to Lantern Lane.
 
 === tobin_evening ===
 { completeness == "full":
-    tobin/laugh: Two falls on one stone in one day. They should name it after us.
+    tobin/laugh: Two falls on one stone. They should name it after us.
 - else:
-    tobin/worried: Hey. About yesterday. I laugh when I'm nervous. It wasn't about you.
+    tobin/worried: Hey. About your fall. I laugh when I'm nervous. It wasn't about you.
 }
 + ["Somebody should fix that stone."]
     tobin/smile: I'm fixing it tomorrow. With a hammer. Personally.
@@ -918,7 +926,7 @@ nell/smile: You look like a candle burned at both ends.
 
 === ash_day2 ===
 ash/smile: You look terrible. Lovingly.
-ash: If you need someone to take your stall shift this afternoon, I'm free.
+ash: If you need someone to take your turn on the festival stall this afternoon, I'm free.
 + ["I might take you up on that."]
     ash/warm: Offer stands.
 + ["I'll be fine."]
@@ -1446,7 +1454,7 @@ tobin: Mind the stone.
     mara: My grandmother started it. Sixty-one years ago, with one lantern on her own front step.
     mara/smile: Then a neighbor put one out. Then the whole lane. Then the square.
     { variant == "promise":
-        mara/warm: That's her lantern you've got. The first one.
+        mara/warm: That's her lantern you're looking after. The first one.
     }
     ~ mara_grandma = true
 * {phase == "afternoon"} [Ask why she asked you to carry the lanterns]
@@ -1459,7 +1467,7 @@ tobin: Mind the stone.
 * {phase == "festival" && mara_grandma} [Ask about her grandmother]
     mara/warm: She used to say the lanterns aren't for seeing by. They're for seeing each other.
 * {phase == "festival"} [Ask what she was worried about]
-    mara/worried: Last night? That something had gone wrong and it was my fault. It's always my first guess.
+    mara/worried: That something had gone wrong and it was my fault. It's always my first guess.
     ** ["It wasn't."]
         mara/smile: I know. Now.
     ** ["That's my first guess, too."]
@@ -1577,7 +1585,7 @@ mara/embarrassed: Five years, and I've never opened it. What if it's all the thi
     { carried_bread:
         wren/warm: Better, for not carrying those trays. Thank you. I wouldn't have asked.
     - else:
-        oda/laugh: Pip and Juno carried the trays. Wren supervised. Loudly.
+        oda/laugh: The trays got carried. Wren supervised. Loudly.
     }
 * {phase == "day2"} [Ask Oda if she slept]
     ~ oda_early = true
@@ -1807,7 +1815,7 @@ Tobin clears a corner of the bench. #scene: lanterns
 
 === hub_ash ===
 { next_giver == "ash":
-    ash/worried: It's today. I open at noon. Can you come early?
+    ash/worried: Today's the real opening, with the whole village coming. Will you help me get ready?
 - else:
     ash/smile: Sit anywhere. Anything you've dried, steeped or found under a tree, I'll take it.
 }
@@ -1975,7 +1983,7 @@ You look through your bag for something. #scene: gift
     }
 - "ash":
     { gift_fit:
-    - "best": ash/warm: {gift_name}. You remembered. I said that once, in passing, about a week ago.
+    - "best": ash/warm: {gift_name}. {ash_likes:You remembered. I only said that once, in passing.|How did you know? That's exactly it.}
     - "good": ash/smile: Oh, this'll brew. Thank you. I'm going to smell it for a while first.
     - else: ash/smile: {gift_name}. It's going on the shelf by the till, so I can look at it when I panic.
     }
@@ -2148,7 +2156,7 @@ You tie it to the post in the middle of the bridge. It doesn't look like much. T
 ~ woods_stage = 2
 ~ phase = "woods_end"
 { gifts_given > 2:
-    Oda's wearing something you gave her in a pocket. Juno has the good box. Nobody says anything about it.
+    Here and there you spot something you gave someone, in a pocket or on a sill. Nobody says anything about it.
 - else:
     { gifts_given > 0:
         Someone has a thing of yours in their pocket. They don't mention it. You notice anyway.
@@ -2171,7 +2179,7 @@ Ash opens in the morning. For now, you can stay as long as you like.
 { seen_ash != phase:
     ~ seen_ash = phase
     { woods_stage:
-    - 0: ash/worried: I've got forty chairs and no idea what I'm serving. I'm being very calm about it.
+    - 0: ash/worried: I've got twenty-two chairs and no idea what I'm serving. I'm being very calm about it.
     - 1: ash/smile: A whole other wood. Do you know what grows in a wood nobody's been in for sixty years? Neither do I. Bring me some.
     - else: ash/warm: Tomorrow. I keep saying it out loud to see if it's got any less frightening.
     }
@@ -2300,7 +2308,7 @@ She drifts off to look at the cups. Ash turns to you, very fast, in a low voice.
 ash/worried: Okay. I need to ask you something, and I need you to say yes, because I don't have a plan B.
 ash: Could you run the counter? Mornings. Every morning, just until it takes off. I can't pay you yet. I know. I know.
 ash: Mum's here. If I can't keep it open, she's right. I need a second person.
-You think about two weeks ago: the bread trays, the bunting, the lantern sorting, sitting down on the fountain and not being able to get up. #event: tense
+You think about how easily one more yes turns into too many. #event: tense
 Every morning is a lot. You want Ash to have this. You also know what every morning would do to you.
 Work out what you'll say. #scene: sayit
 + [·] -> answer
@@ -2590,7 +2598,7 @@ nell: Go on, then.
     mara/warm: I read the whole thing. Sixty years of turnips and fires and forgetting the candles.
     mara: She wasn't keeping track of what she got right. She was keeping track of what was funny.
 * {told_nell} [Ask about Nell's teapot]
-    mara/embarrassed: She came over with it the next morning, and I cried on her doorstep. She told me to stop or I'd rust it.
+    mara/embarrassed: She came over with it the next morning, and I cried on my own doorstep. She told me to stop or I'd rust it.
 + [Say goodbye]
     -> bye
 - -> menu
@@ -2851,7 +2859,7 @@ Now it's just you, and the candles, and the snow, and a road you can't see. #eve
 === dawn ===
 Somewhere after four, you must close your eyes.
 You open them to grey light, and a rumble at the end of the lane. #event: morning
-Through the snowflakes on the window, two yellow lights. The plough. And behind it, someone running.
+{made_snowflakes:Through the paper snowflakes|Through the frost} on the window, two yellow lights. The plough. And behind it, someone running.
 -> meet_hettie
 
 === meet_hettie ===
@@ -3007,7 +3015,12 @@ oda: Mind the ice, love.
         - else:
             nell: I came out for the post and now I can't get past that drift. Stuck on my own step, at my age.
         }
-    - else: nell/happy: Morning! Path's still clear, thanks to someone.
+    - else:
+        { cleared_path:
+            nell/happy: Morning! Path's still clear, thanks to someone.
+        - else:
+            nell/happy: Morning! Still stuck, but it's a lovely view.
+        }
     }
 - else:
     nell: Still here.
@@ -3041,7 +3054,7 @@ nell: Mind the ice.
     hettie: In the end I made tea for the night porter and did a crossword I already knew the answers to. It helped, a bit.
 * [Tell her how the night went]
     { made_snowflakes:
-        You tell her about the snowflakes, and the music box, and Pip conducting.
+        You tell her about the snowflakes{played_music:, and the music box}.
         hettie/warm: Snowflakes. She's going to want to do that every night now.
     - else:
         You tell her about the candles, and the waiting, and the kids falling asleep in a heap.
@@ -3103,7 +3116,7 @@ fen/happy: And you brought a friend. Good. Someone to carry things. Ha!
 === into_shed ===
 Inside, the shed smells of salt and wet wood. There's a dark line across every wall, higher than your knees, where the sea came in. #event: go shed
 All along the back wall are empty hooks, dozens of them, each with a pale shape on the wood where a mould used to hang. #event: grief
-tobin/sad: Forty years of moulds. Every lantern on Lantern Lane came off these hooks.
+tobin/sad: Forty years of moulds. Nearly every lantern on Lantern Lane came off these hooks.
 hesketh: The tide's on the turn. It'll be back in this floor in a few minutes. Take what you can.
 Water's already sliding in under the door. #event: place tobin:off #event: place hesketh:12760
 Carry out what you can before the water reaches it. #scene: tide
@@ -3120,7 +3133,15 @@ The tide comes in, slow and grey, and fills the shed to the line on the wall. Th
 { fought >= 3:
     Your arms are shaking from the sandbags. The water came in around them anyway, the way water does.
 }
-tobin/sad: It's gone. All of it. The first moulds Hesketh ever made.
+{ saved_count >= 5:
+    tobin/sad: The shed's under. But we got it out, every bit of it.
+- else:
+    { saved_count > 0:
+        tobin/sad: What's in your arms is what's left. The rest has gone.
+    - else:
+        tobin/sad: It's gone. All of it. The first moulds Hesketh ever made.
+    }
+}
 Fen comes down the shingle with a flask. #event: place fen:12560
 fen/laughing: Well! Lighter to carry home! Ha!
 tobin/upset: Dad. Can you NOT. Just once. #event: face fen:surprised
@@ -3250,8 +3271,8 @@ fen: Mind the gulls!
     tobin/worried: Everything Hesketh ever made, near enough. The first moulds. Notebooks. He kept a photo of us on the shelf, from my first week.
     tobin: The letter says most of it's gone. I keep picturing it like it was.
 * {phase == "coast_dusk"} [Ask about his dad]
-    tobin/sad: He said sorry. He's never said sorry. He made a joke straight after, but it was a small one.
-    tobin/warm: I didn't mind that one.
+    tobin/sad: He said sorry. He's never said sorry. And he didn't even make a joke after.
+    tobin/warm: I don't know what to do with that. I think I like it.
 * {phase == "coast_dusk"} [Ask what happens to the workshop now]
     tobin: New moulds. New lanterns. Old ones in the notebooks, maybe. Crooked ones, definitely.
     tobin/laughing: I'm keeping the crooked ones. That's my thing now.

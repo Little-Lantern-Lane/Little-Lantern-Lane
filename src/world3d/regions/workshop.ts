@@ -129,13 +129,14 @@ export function buildWorkshop(): RegionKit {
   const corner = new THREE.Group();
   const samples = { wall: "#f7d9c4", roof: "#7a9fd0", trim: "#5f8fb0", door: "#5f8fb0" };
   const shown: Blocker[] = [];
-  for (const [id, x, z, turn] of [["rug_round", 5700, 0.1, 0], ["sofa", 5660, -2.3, 0], ["bookcase", 5730, -2.7, 0], ["bed", 5740, 1.6, Math.PI / 2], ["chair", 5640, 1.7, 0.5], ["lantern_stand", 5620, -0.6, 0]] as const) {
+  for (const [id, x, z, turn] of [["rug_round", 5700, 0.4, 0], ["sofa", 5640, 1.8, Math.PI], ["bed", 5770, 1.7, Math.PI / 2], ["chair", 5710, 2.2, Math.PI], ["lantern_stand", 5850, -1, 0]] as const) {
     const piece = furnitureModel(id, samples);
     piece.position.set(X(x), 0, z);
     piece.rotation.y = turn;
     corner.add(piece);
     const r = FURNITURE[id].r;
-    if (r) shown.push({ X: X(x), Z: Z + z, r });
+    if (id === "bed") for (const d of [-0.9, 0, 0.9]) shown.push({ X: X(x) + d, Z: Z + z, r: 0.75 });
+    else if (r) shown.push({ X: X(x), Z: Z + z, r });
   }
   const hanging = (text: string, x: number, z: number) => {
     const plate = paint(320, 80, (c) => {
@@ -155,7 +156,7 @@ export function buildWorkshop(): RegionKit {
   hanging("LANTERNS", 5300, -0.6);
   hanging("FURNITURE", 5700, -0.6);
   const street = wallDoor(1.9, 3.2, "#7a9a5a");
-  street.position.set(X(5790), 0, BACK);
+  street.position.set(X(5700), 0, BACK);
   corner.add(street);
   corner.visible = false;
   g.add(corner);

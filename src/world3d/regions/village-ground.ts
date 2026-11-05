@@ -101,7 +101,7 @@ function paved(g: CanvasRenderingContext2D, color: string, blur: number) {
 }
 
 /** Short paths from the doors to the lane. */
-const YARDS = [5.45, 13.45, 24.9, 30];
+const YARDS = [5.45, 13.45, 22.2, 27, 31.35];
 
 function feather(g: CanvasRenderingContext2D, c: string) {
   const edge = (x0: number, y0: number, x1: number, y1: number, rx: number, ry: number, rw: number, rh: number) => {

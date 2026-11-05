@@ -226,7 +226,7 @@ function gate(p: Parts, x: number, z: number): void {
   for (const d of [-1.35, 1.35]) p.add(pipe(0.13, 0.16, 3.3, wood, x + d, 1.65, z));
   p.add(pbox(3.5, 0.24, 0.26, 0.08, dark, x, 3.3, z));
   p.add(pbox(2.5, 0.6, 0.12, 0.1, soft("#a8674a"), x, 2.75, z + 0.04));
-  const face = sign("TO THE LANE", 2.2, 0.46);
+  const face = sign("THE WAY BACK", 2.2, 0.46);
   face.position.set(x, 2.75, z + 0.12);
   p.add(face);
 }

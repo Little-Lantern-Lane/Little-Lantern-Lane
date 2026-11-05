@@ -81,7 +81,7 @@ export function signPost(x: number, z: number, text: string): THREE.Group {
 }
 
 /** A worn path on the ground: a dirt ribbon with a softer edge, following `heightAt` so it lies on the land. */
-export function groundTrail(pts: [number, number][], heightAt: (X: number, z: number) => number, offsetZ: number, colour = "#d9bf94", edge = "#c4a878", posts = true): THREE.Group {
+export function groundTrail(pts: [number, number][], heightAt: (X: number, z: number) => number, offsetZ: number, colour = "#d9bf94", edge = "#c4a878", road = false): THREE.Group {
   const g = new THREE.Group();
   const curve = new THREE.CatmullRomCurve3(pts.map(([x, z]) => new THREE.Vector3(worldX(x), 0, z)));
   const n = Math.max(24, Math.round(curve.getLength() * 3));
@@ -110,9 +110,10 @@ export function groundTrail(pts: [number, number][], heightAt: (X: number, z: nu
     m.receiveShadow = true;
     return m;
   };
-  g.add(ribbon(1.65, 0.035, edge), ribbon(1.25, 0.05, colour));
+  // Where a road is already there, the posts alone mark it.
+  if (!road) g.add(ribbon(1.65, 0.035, edge), ribbon(1.25, 0.05, colour));
   // Little lantern posts along both sides, so you can see a path from a long way off.
-  if (posts) {
+  {
     const p = new Parts();
     const count = Math.floor(curve.getLength() / 4);
     for (let i = 1; i <= count; i++) {
@@ -499,8 +500,6 @@ export function buildVillage(ctx: BuildContext): VillageKit {
   const laneSign = p.sub(-0.75, 0, -3.5);
   for (const x of [-1.1, 1.1]) laneSign.add(pipe(0.07, 0.09, 2.5, soft("#7c5a42"), x, 1.25, -0.08));
   textSign(laneSign, "LANTERN LANE", 0, 2.25, 0, 2.4, 0.42);
-  lamppost(p, 16.3, 0, -3);
-  block(16.3, -3, 0.3);
   // The way to your own door: stepping stones up from the lane, and a sign so you can find it.
   const doorX = X(HOME_DOOR);
   for (const [dx, z, w] of [[0.1, -3, 0.95], [-0.14, -3.45, 0.85], [0.08, -3.9, 0.9]] as const) p.add(pbox(w, 0.08, 0.42, 0.04, soft("#e6d6b8"), doorX + dx, 0.04, z));
@@ -526,10 +525,10 @@ export function buildVillage(ctx: BuildContext): VillageKit {
   for (const [dx, z, w] of [[0.1, -3.05, 1], [-0.12, -3.6, 0.9], [0.14, -4.15, 0.95], [-0.05, -4.75, 0.85], [0.1, -5.4, 0.8]] as const) p.add(pbox(w, 0.08, 0.4, 0.04, soft("#d8c9a8"), gateX + dx, 0.04, z));
 
   // --- Market Street ---
-  const BAKERY_X = 20.2;
-  bakery(p.sub(BAKERY_X, 0, FRONT), 5.5, 3.9, "#ffe1d4", "#8bbf74", 1.7);
+  const BAKERY_X = 21;
+  bakery(p.sub(BAKERY_X, 0, FRONT), 4.2, 3.9, "#ffe1d4", "#8bbf74", 1.2);
   workshop(p.sub(X(1485), 0, FRONT - 0.2), 4.9, 4.1, "#fde6a8", "#b986c9");
-  townhouse(p.sub(35.8, 0, -5.4), 2.7, 5, "#e3ecf7", "#e57b5f");
+  townhouse(p.sub(36.7, 0, -5.4), 2.7, 5, "#e3ecf7", "#e57b5f");
   // Tobin's second storefront, joined on to the workshop: one building, two shops.
   const ext = p.sub(31.35, 0, FRONT - 0.2);
   const EW = 3.8;
@@ -539,9 +538,9 @@ export function buildVillage(ctx: BuildContext): VillageKit {
   textSign(ext, "FURNITURE", 0, 3.68, 0, 2.5, 0.52);
   door(ext, X(SHOP_DOORS.furniture) - 31.35, 0, 1.3, 2.3, "#7a9a5a", "square");
   for (const d of [-1.25, 1.25]) win(ext, d, 1.6, 0, 0.82, 1.5, { kind: "arch" });
-  lamppost(p, X(1265), 0, -3.2);
+  lamppost(p, 23.6, 0, -3.2);
   lamppost(p, X(1860), 0, -3.2);
-  block(X(1265), -3.2, 0.3);
+  block(23.6, -3.2, 0.3);
   block(X(1860), -3.2, 0.3);
   // Ash's cart.
   const cartParts = new Parts();
@@ -549,12 +548,10 @@ export function buildVillage(ctx: BuildContext): VillageKit {
   const cartBlocks: Blocker[] = [-0.8, 0.8].map((d) => ({ X: X(1880) + d, Z: VILLAGE_Z.teaCart, r: 0.85 }));
   blockers.push(...cartBlocks);
   p.spot(X(1880), 2.5, VILLAGE_Z.teaCart + 0.4, "#ffc98a", 14);
-  barrel(p, 18, -3.15);
-  barrel(p, 17.45, -3.35, 0.85);
-  crate(p, 23.75, -3.45, 1, 0.3);
-  crate(p, 24.15, -3.5, 0.75, 0.9);
+  barrel(p, 18.3, -3.15);
+  barrel(p, 18.85, -3.35, 0.85);
   s.bush(23.75, 0, -4.8, 0.7, GREENS[1], ["#fbe08a", "#f4b9c0"], 3);
-  pot(p, s, 18.9, -3.45, "#f6d36a");
+  pot(p, s, 19.4, -3.45, "#f6d36a");
 
   // --- The Square ---
   const SQ = -8.2;
@@ -564,10 +561,10 @@ export function buildVillage(ctx: BuildContext): VillageKit {
   stall(p.sub(47.3, 0, -8.8));
   bench(p, 44.5, 0, -6.95);
   bench(p, 53.6, 0, -6.95);
-  block(X(2320) - 0.55, -6.95, 0.5);
-  block(X(2320) + 0.55, -6.95, 0.5);
-  block(X(2810) - 0.55, -6.95, 0.5);
-  block(X(2810) + 0.55, -6.95, 0.5);
+  block(44.5 - 0.55, -6.95, 0.5);
+  block(44.5 + 0.55, -6.95, 0.5);
+  block(53.6 - 0.55, -6.95, 0.5);
+  block(53.6 + 0.55, -6.95, 0.5);
   lamppost(p, X(2120), 0, -7);
   lamppost(p, X(3000), 0, -7);
   block(X(2120), -7, 0.3);
@@ -713,7 +710,7 @@ export function buildVillage(ctx: BuildContext): VillageKit {
   });
   // Trees fill everything behind the buildings; none on top of a house.
   const clear = (x: number, z: number) => !houses.some(([hx, hz, w]) => Math.abs(x - hx) < w / 2 + 1.8 && z < hz + 2 && z > hz - 6);
-  for (const [x, z, sc] of [[-0.4, -6.4, 1.1], [16.7, -4.6, 0.8], [26.9, -6.8, 1.15], [37.9, -7.6, 1.15], [57.9, -7.8, 1.1], [3, -8.8, 1.3], [7.2, -9, 1.2], [11, -10.2, 1.3], [20.6, -10, 1.3], [33.3, -8.8, 1.2], [37.2, -11, 1.3], [44.2, -12.2, 1.35], [49.3, -11.8, 1.3], [53, -13, 1.3]]) {
+  for (const [x, z, sc] of [[-0.4, -6.4, 1.1], [57.9, -7.8, 1.1], [3, -8.8, 1.3], [7.2, -9, 1.2], [11, -10.2, 1.3], [20.6, -10, 1.3], [33.3, -8.8, 1.2], [37.2, -11, 1.3], [44.2, -12.2, 1.35], [49.3, -11.8, 1.3], [53, -13, 1.3]]) {
     s.tree(x, gyAt(x, z), z, sc, GREENS[Math.floor(r() * 4)], r() * 6);
   }
   for (let i = 0; i < 150; i++) {
