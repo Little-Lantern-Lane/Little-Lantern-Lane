@@ -204,7 +204,7 @@ export class World3D {
   /** Picked things and when they'll be back. */
   private regrowing = new Map<GatherNode, number>();
   private fishing: Fishing | null = null;
-  private wayfinding: THREE.Group[] = [];
+  private wayfinding: { mesh: THREE.Group; level: number }[] = [];
   private natureShow = new THREE.Group();
   private pathArmed = true;
   /** How far the camera has been turned around you, in the woods. */
@@ -431,7 +431,7 @@ export class World3D {
     const put = (x: number, mesh: THREE.Group) => {
       mesh.position.z = regionZ(x);
       this.kits[regionAt(x).id].group.add(mesh);
-      this.wayfinding.push(mesh);
+      this.wayfinding.push({ mesh, level: 8 });
     };
     for (const m of MAP_BOARDS) put(m.x, mapBoard(worldX(m.x), m.z));
     put(11560, fishStall(worldX(11560), -3.4));
@@ -442,15 +442,15 @@ export class World3D {
       sign.position.z = regionZ(s.x);
       sign.position.y = regionAt(s.x).id === "village" ? groundAt(worldX(s.x), s.z) : 0;
       this.kits[regionAt(s.x).id].group.add(sign);
-      if (!s.always) this.wayfinding.push(sign);
+      if (!s.always) this.wayfinding.push({ mesh: sign, level: s.only ?? 8 });
     }
     for (const t of Object.values(TRAILS)) {
       const id = regionAt(t[0][0]).id;
-      if (id === "coast") continue; // the quay is the road
       // Sits over the Square's cobbles.
       const height = id === "village" ? (x: number, z: number) => groundAt(x, z) + 0.07 : () => 0.02;
       const sand = id === "beach";
-      this.kits[id].group.add(groundTrail(t, height, regionZ(t[0][0]), sand ? "#c4a26e" : "#b8915f", sand ? "#a3845a" : "#967349"));
+      const quay = id === "coast"; // paved, so it's a line of paler flagstones
+      this.kits[id].group.add(groundTrail(t, height, regionZ(t[0][0]), quay ? "#d8cfbc" : sand ? "#c4a26e" : "#b8915f", quay ? "#bdb29c" : sand ? "#a3845a" : "#967349"));
     }
   }
 
@@ -597,7 +597,7 @@ export class World3D {
       this.lastLevel = w.level;
     }
     for (const k of Object.values(this.kits)) k.setState(w);
-    for (const m of this.wayfinding) m.visible = w.level === 8;
+    for (const m of this.wayfinding) m.mesh.visible = w.level === m.level;
     this.natureShow.visible = w.level === 8;
     this.setSky(skyFor(w, this.px, this.pz));
     const storm = w.weather === "storm";

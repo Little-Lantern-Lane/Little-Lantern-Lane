@@ -578,6 +578,9 @@ export function buildWoods(): WoodsKit {
   stall.add(pbox(2.5, 0.14, 1, 0.05, soft("#b9895e"), 0, 0.95, 0), pbox(2.2, 0.85, 0.8, 0.05, soft("#a8784e"), 0, 0.46, 0));
   for (let i = 0; i < 6; i++) stall.add(pbox(0.46, 0.1, 1.2, 0.04, soft(i % 2 ? "#fffaf0" : "#7fae6a"), -1.15 + i * 0.46, 2.3, 0.05));
   for (const [dx, col] of [[-0.7, "#e0574c"], [0, "#f2b54a"], [0.7, "#7fc4e8"]] as const) stall.add(dot(0.2, soft(col), dx, 1.14, 0.08));
+  const stallSign = sign("THE WOODS STALL", 2.2, 0.36);
+  stallSign.position.set(0, 2.72, 0.1);
+  stall.add(stallSign);
   const stallMesh = bake(stallGroup.base);
   stallMesh.position.z = Z;
   group.add(stallMesh);

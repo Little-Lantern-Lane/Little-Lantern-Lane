@@ -7,7 +7,7 @@ import { Engine } from "../src/engine";
 import { initialBag, ITEM_IDS, applyBagEvent, normalizeBag } from "../src/logic/bag";
 import { applyEvent, initialState } from "../src/logic/state";
 import { applyWorldEvent } from "../src/logic/world";
-import { canEnterHome, canLeaveHome, canVisitWoods, DOORS, LANTERN_ROW, MAP_BOARDS, MAP_PLACES, NEXT_GIVER, NPC_SPOTS, onTrail, PATH_REACH, phaseOf, PLAYER_SPOTS, regionAt, TRAILS, WALK_SIGNS } from "../src/game/layout";
+import { canEnterHome, canLeaveHome, canVisitWoods, distToTrail, USABLES, DOORS, LANTERN_ROW, MAP_BOARDS, MAP_PLACES, NEXT_GIVER, NPC_SPOTS, onTrail, PATH_REACH, phaseOf, PLAYER_SPOTS, regionAt, TRAILS, WALK_SIGNS } from "../src/game/layout";
 import { bandAt } from "../src/world3d/space";
 import { readBag, writeBag } from "../src/save";
 
@@ -122,6 +122,32 @@ describe("the village", () => {
 
   it("signposts the way to the beach from the Square", () => {
     expect(WALK_SIGNS.find((s) => /BEACH/.test(s.text) && s.x < 3200)?.always).toBe(true);
+  });
+
+  it("keeps signs and map boards clear of each other, of paths and of doors", () => {
+    const posts = [...WALK_SIGNS.filter((s) => !s.only), ...MAP_BOARDS];
+    posts.forEach((a, i) => {
+      posts.slice(i + 1).forEach((b) => {
+        if (regionAt(a.x) !== regionAt(b.x) || Math.abs(a.z - b.z) > 3) return;
+        expect(Math.abs(a.x - b.x) / 55, `${a.x} and ${b.x}`).toBeGreaterThan(2.3);
+      });
+      for (const t of Object.values(TRAILS)) if (regionAt(t[0][0]) === regionAt(a.x)) expect(distToTrail(a.x, a.z, t), `${a.x} on a path`).toBeGreaterThan(1.6);
+    });
+    // Saltmouth's front doors, and the Square's.
+    for (const door of [11058, 11300, 11467, 2296, 2832]) {
+      for (const p of posts) if (regionAt(p.x) === regionAt(door) && p.z < 0) expect(Math.abs(p.x - door) / 55, `${p.x} in front of a door`).toBeGreaterThan(1.4);
+    }
+  });
+
+  it("shows only one sign in any spot, whichever chapter it is", () => {
+    for (const level of [undefined, 4, 6]) {
+      const shown = WALK_SIGNS.filter((s) => (level ? s.only === level || s.always : !s.only));
+      shown.forEach((a, i) => shown.slice(i + 1).forEach((b) => expect(Math.hypot((a.x - b.x) / 55, a.z - b.z), `${a.text} and ${b.text}`).toBeGreaterThan(2.3)));
+    }
+  });
+
+  it("keeps the mirror inside your home", () => {
+    expect(regionAt(USABLES.mirror.x).id).toBe("home");
   });
 
   it("has a map board in every outdoor place", () => {

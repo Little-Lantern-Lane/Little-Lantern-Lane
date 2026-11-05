@@ -29,6 +29,14 @@ describe("shops", () => {
     expect(regionAt(NPC_SPOTS.hub.tobin!).id).toBe("workshop");
   });
 
+  it("Tobin's shop is one building with two storefronts, and he stands between the two sides", () => {
+    const fronts = DOORS.filter((d) => regionAt(d.to).id === "workshop");
+    expect(fronts).toHaveLength(2);
+    const [lanterns, furniture] = [5170, 5790];
+    expect(NPC_SPOTS.hub.tobin!).toBeGreaterThan(lanterns);
+    expect(NPC_SPOTS.hub.tobin!).toBeLessThan(furniture);
+  });
+
   it("leaves everyone where the story wants them in the chapters", () => {
     expect(regionAt(NPC_SPOTS.afternoon.wren!).id).toBe("village");
     expect(NPC_SPOTS.afternoon.ash).toBe(1880); // Ash's cart, before the tea room opens

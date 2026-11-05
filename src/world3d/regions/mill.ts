@@ -3,13 +3,12 @@
 // through it; past that is the old mill office, a doll's-house room open toward the camera.
 
 import * as THREE from "three";
-import { MILL_PATH, GROUND_Y, PROPS, USABLES } from "../../game/layout";
+import { GROUND_Y, PROPS, USABLES } from "../../game/layout";
 import type { WorldState } from "../../logic/world";
 import {
   ball, BLOCK, boardCanvas, cyl, drift, flat, flow, glowing, groundFrom, isEvening, lantern, LANTERN_COLOURS, many, noShadow, own, paint, rbox, seeded, setLit, soft, steam, stoneWall, teacup, teapot, tree, waterSheet, type Lit, type Piece,
 } from "../kit";
 import { regionZ, worldX as X } from "../space";
-import { woodsPost } from "./village";
 import type { Blocker, LightSpot, RegionKit } from "../types";
 
 const WOOD = "#9b6b43";
@@ -29,6 +28,8 @@ const BANK_Z = -4.1;
 const WALL_X = 8992;
 const WALL_T = 0.8;
 const BACK = -3.4;
+const MAE_PORTRAIT = 9910;
+const WOOD_FRAME = "#7a5340";
 const FRONT = 3.4;
 const H = 9;
 /** The cart arch spans the whole of the room's walking width. */
@@ -634,6 +635,74 @@ export function buildMill(): RegionKit {
   }
   g.add(many(new THREE.CylinderGeometry(1, 0.74, 1, 14), bodies, 0.5), many(new THREE.TorusGeometry(1, 0.32, 8, 12), handles, 0.5));
 
+  // Mae, who the room is named for: a photo of her at the cart, with a brass plate underneath.
+  const portrait = paint(300, 380, (c) => {
+    const sky = c.createLinearGradient(0, 0, 0, 380);
+    sky.addColorStop(0, "#e6cfa0");
+    sky.addColorStop(1, "#c9a878");
+    c.fillStyle = sky;
+    c.fillRect(0, 0, 300, 380);
+    // The cart behind her.
+    c.fillStyle = "#6f8a70";
+    c.beginPath();
+    c.roundRect(150, 170, 150, 150, 10);
+    c.fill();
+    c.fillStyle = "#d9b24f";
+    c.beginPath();
+    c.moveTo(130, 170);
+    c.quadraticCurveTo(225, 96, 320, 170);
+    c.fill();
+    // An old bear in a shawl, with a teapot.
+    const fur = "#a98a6a";
+    c.fillStyle = "#b5574f";
+    c.beginPath();
+    c.ellipse(112, 300, 78, 92, 0, 0, 7);
+    c.fill();
+    c.fillStyle = fur;
+    for (const x of [64, 160]) {
+      c.beginPath();
+      c.arc(x, 112, 26, 0, 7);
+      c.fill();
+    }
+    c.beginPath();
+    c.arc(112, 160, 66, 0, 7);
+    c.fill();
+    c.fillStyle = "#e8d8c0";
+    c.beginPath();
+    c.ellipse(112, 182, 36, 28, 0, 0, 7);
+    c.fill();
+    // Grey at the top of her head, and a kind face.
+    c.fillStyle = "#d8d2c8";
+    c.beginPath();
+    c.ellipse(112, 106, 44, 16, 0, 0, 7);
+    c.fill();
+    c.fillStyle = "#3a2b22";
+    for (const x of [88, 136]) {
+      c.beginPath();
+      c.arc(x, 150, 6, Math.PI, 0);
+      c.lineWidth = 4;
+      c.strokeStyle = "#3a2b22";
+      c.stroke();
+    }
+    c.beginPath();
+    c.ellipse(112, 172, 9, 6, 0, 0, 7);
+    c.fill();
+    c.beginPath();
+    c.arc(112, 182, 14, 0.25, Math.PI - 0.25);
+    c.stroke();
+  });
+  const plate = paint(320, 60, (c) => {
+    c.fillStyle = "#d9b24f";
+    c.fillRect(0, 0, 320, 60);
+    c.fillStyle = "#3a2b22";
+    c.font = 'bold 19px Georgia, serif';
+    c.textAlign = "center";
+    c.fillText("Mae, forty years at the cart", 160, 38);
+  });
+  const px = X(MAE_PORTRAIT);
+  g.add(rbox(1.75, 2.15, 0.1, 0.07, soft(WOOD_FRAME), px, 4.55, BACK + 0.08));
+  g.add(flat(portrait, 1.45, 1.84, px, 4.55, BACK + 0.15), rbox(2.3, 0.46, 0.06, 0.03, soft(WOOD_FRAME), px, 3.2, BACK + 0.08), flat(plate, 2.15, 0.36, px, 3.2, BACK + 0.13));
+
   // The counter, the big teapot, a cake under glass and a tin of tea.
   const counterX = X(9660);
   const counterZ = -2.5;
@@ -658,7 +727,6 @@ export function buildMill(): RegionKit {
     [9900, "#b98a5e", [[-1, "#f6d36a", 1], [1, "#7fb0c9", 0]]],
     [10120, "#d9a77c", [[-1, "#c97b6a", 2]]],
   ];
-  g.add(woodsPost(X(MILL_PATH), -3.1));
   const blockers: Blocker[] = [];
   for (const [tx, col, chairs] of tables) {
     const t = cafeTable(col);
@@ -711,7 +779,7 @@ export function buildMill(): RegionKit {
   blockers.push({ X: chalkX, Z: Z - 2.6, r: 0.5 });
 
   // Pendant lamps, on all day: the old office is dim.
-  const lampXs = [9420, 9900, 10120];
+  const lampXs = [9420, 9760, 10120];
   const lamps: Lit[] = [];
   for (const lx of lampXs) {
     const x = X(lx);

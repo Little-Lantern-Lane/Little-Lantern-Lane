@@ -541,6 +541,10 @@ export function buildHouse(home: HomeChoice): HouseKit {
   g.add(paper);
   props.snowflakes = paper;
 
+  // A long mirror under the window, for changing how you look.
+  const mx = X(USABLES.mirror.x);
+  g.add(rbox(1.1, 2, 0.12, 0.3, soft("#b9895e"), mx, 1.1, BACK + 0.2), rbox(0.86, 1.72, 0.04, 0.26, own("#cfe7f0", { roughness: 0.12, metalness: 0.35 }), mx, 1.1, BACK + 0.27));
+
   // The craft table: paper, a cut snowflake, scissors, room for the toast, and a stool.
   const cx = X(USABLES.craft_table.x);
   g.add(rbox(2.9, 0.18, 1.1, 0.07, soft(WOOD_LIGHT), cx, TOP - 0.09, BACK + 0.62));

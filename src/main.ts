@@ -11,7 +11,7 @@ import type { Completeness } from "./logic/outcome";
 import type { GameEvent } from "./logic/tags";
 import { createSound, type Sfx } from "./audio/sound";
 import { World3D, type SceneHooks } from "./world3d/World";
-import { FISHING_SPOTS, GROUND_Y, NEXT_GIVER, NODES, riverMidX } from "./game/layout";
+import { FISHING_SPOTS, GROUND_Y, NEXT_GIVER, NODES, riverMidX, TRAILS } from "./game/layout";
 import { createDialogueBox } from "./ui/dialogue";
 import { createHud } from "./ui/hud";
 import { createMeterView } from "./ui/meter";
@@ -406,6 +406,8 @@ async function play(chosen: Variant, from?: string, resume?: SaveGame) {
   const inVillage = from === "village_hub";
   if (inVillage) {
     state = applyEvent(state, { name: "chapter", arg: "8" });
+    // Between stories the tea room is open, with its sign up.
+    for (const prop of ["sign_up", "chalk_open"]) state = applyEvent(state, { name: "prop", arg: `on:${prop}` });
   }
   meter.render(state.meter);
   showChapter(state.world.level);
@@ -694,7 +696,7 @@ window.addEventListener("keydown", () => sound.unlock(), { once: true });
 
 // ?debug exposes the world for automated playtesting (walk the player, read state).
 if (new URLSearchParams(location.search).has("debug")) {
-  Object.assign(window, { lantern: { world: () => world, state: () => state, growHome, NODES, FISHING_SPOTS, riverMidX } });
+  Object.assign(window, { lantern: { world: () => world, state: () => state, growHome, NODES, FISHING_SPOTS, riverMidX, TRAILS } });
 }
 
 /** The first thing you see: the lanterns light, and then you come in. ?title shows the old chapter list instead. */

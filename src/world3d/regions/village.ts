@@ -4,7 +4,7 @@
 // looking toward -Z) always sees the player.
 
 import * as THREE from "three";
-import { distToTrail, EDGE_X, FOUNTAIN_X, HOME_DOOR, LANE_GATE, POLES, PROPS, TRAILS, USABLES, ZONES } from "../../game/layout";
+import { distToTrail, SHOP_DOORS, EDGE_X, FOUNTAIN_X, HOME_DOOR, LANE_GATE, POLES, PROPS, TRAILS, USABLES, ZONES } from "../../game/layout";
 import type { HomeChoice } from "../../logic/appearance";
 import type { WorldState } from "../../logic/world";
 import { ball, cyl, LANTERN_COLOURS, own, rbox, soft } from "../kit";
@@ -46,7 +46,14 @@ function textSign(p: Parts, text: string, x: number, y: number, z: number, w: nu
   g.fillStyle = "#a8674a";
   g.fillRect(0, 0, c.width, c.height);
   g.fillStyle = "#fff6e6";
-  g.font = `bold ${Math.round(c.height * 0.56)}px "Trebuchet MS", "Segoe UI", sans-serif`;
+  // As big as fits, so no sign's words run off the board.
+  let size = Math.round(c.height * 0.56);
+  const font = () => `bold ${size}px "Trebuchet MS", "Segoe UI", sans-serif`;
+  g.font = font();
+  while (g.measureText(text).width > c.width * 0.92 && size > 10) {
+    size -= 2;
+    g.font = font();
+  }
   g.textAlign = "center";
   g.textBaseline = "middle";
   g.fillText(text, c.width / 2, c.height * 0.54);
@@ -61,6 +68,9 @@ function textSign(p: Parts, text: string, x: number, y: number, z: number, w: nu
   p.winter.add(pbox(w + h * 0.5, 0.1, 0.2, 0.05, snowMat(), x, y + h / 2 + 0.05, z + 0.06));
 }
 
+/** Keeps the paths out of the village clear of scenery. */
+const nearTrail = (x: number, z: number, room = 3) => [TRAILS.toBeach, TRAILS.toMill, TRAILS.toWoods].some((t) => distToTrail(x * 55, z, t) < room);
+
 /** A post pointing the way somewhere. */
 export function signPost(x: number, z: number, text: string): THREE.Group {
   const p = new Parts();
@@ -70,10 +80,8 @@ export function signPost(x: number, z: number, text: string): THREE.Group {
   return bake(p.base);
 }
 
-export const woodsPost = (x: number, z: number) => signPost(x, z, "TO THE WOODS");
-
 /** A worn path on the ground: a dirt ribbon with a softer edge, following `heightAt` so it lies on the land. */
-export function groundTrail(pts: [number, number][], heightAt: (X: number, z: number) => number, offsetZ: number, colour = "#d9bf94", edge = "#c4a878"): THREE.Group {
+export function groundTrail(pts: [number, number][], heightAt: (X: number, z: number) => number, offsetZ: number, colour = "#d9bf94", edge = "#c4a878", posts = true): THREE.Group {
   const g = new THREE.Group();
   const curve = new THREE.CatmullRomCurve3(pts.map(([x, z]) => new THREE.Vector3(worldX(x), 0, z)));
   const n = Math.max(24, Math.round(curve.getLength() * 3));
@@ -103,6 +111,20 @@ export function groundTrail(pts: [number, number][], heightAt: (X: number, z: nu
     return m;
   };
   g.add(ribbon(1.65, 0.035, edge), ribbon(1.25, 0.05, colour));
+  // Little lantern posts along both sides, so you can see a path from a long way off.
+  if (posts) {
+    const p = new Parts();
+    const count = Math.floor(curve.getLength() / 4);
+    for (let i = 1; i <= count; i++) {
+      const c = curve.getPoint(i / (count + 0.5));
+      const t = curve.getTangent(i / (count + 0.5));
+      const d = i % 2 ? 1 : -1;
+      const [x, z] = [c.x - t.z * 2 * d, c.z + t.x * 2 * d];
+      const y = heightAt(x, z);
+      p.add(pipe(0.04, 0.055, 0.9, soft("#7c5a42"), x, y + 0.45, z + offsetZ), dot(0.13, soft("#f6c35a", 0.5), x, y + 0.98, z + offsetZ));
+    }
+    g.add(bake(p.base));
+  }
   return g;
 }
 
@@ -379,8 +401,8 @@ function stoneWall(s: Scatter, r: () => number, x0: number, x1: number, z: numbe
       const [x, zz] = ax === "x" ? [t, z] : [z, t];
       const c = ["#c9c0ae", "#b9b0a2", "#d6cec0"][Math.floor(r() * 3)];
       const sz = 0.3 + r() * 0.06;
-      s.put("rock", x, y0(x, zz) + 0.16 + row * 0.26, zz, ax === "x" ? sz : 0.24, 0.19, ax === "x" ? 0.24 : sz, c);
-      if (row === rows - 1) s.put("lump", x, y0(x, zz) + 0.3 + row * 0.26, zz, 0.32, 0.1, 0.28, SNOW);
+      if (!nearTrail(x, zz, 2.2)) s.put("rock", x, y0(x, zz) + 0.16 + row * 0.26, zz, ax === "x" ? sz : 0.24, 0.19, ax === "x" ? 0.24 : sz, c);
+      if (row === rows - 1 && !nearTrail(x, zz, 2.2)) s.put("lump", x, y0(x, zz) + 0.3 + row * 0.26, zz, 0.32, 0.1, 0.28, SNOW);
     }
   }
 }
@@ -452,7 +474,6 @@ export function buildVillage(ctx: BuildContext): VillageKit {
   // Ground.
   const ground = groundMesh();
   const groundMat = ground.material as THREE.MeshStandardMaterial;
-  const nearTrail = (x: number, z: number) => distToTrail(x * 55, z, TRAILS.toBeach) < 3.2 || distToTrail(x * 55, z, TRAILS.toMill) < 3.2 || distToTrail(x * 55, z, TRAILS.toWoods) < 2.6;
   const summerMap = summerGround();
   let snowMap: THREE.CanvasTexture | null = null;
   groundMat.map = summerMap;
@@ -478,8 +499,8 @@ export function buildVillage(ctx: BuildContext): VillageKit {
   const laneSign = p.sub(-0.75, 0, -3.5);
   for (const x of [-1.1, 1.1]) laneSign.add(pipe(0.07, 0.09, 2.5, soft("#7c5a42"), x, 1.25, -0.08));
   textSign(laneSign, "LANTERN LANE", 0, 2.25, 0, 2.4, 0.42);
-  lamppost(p, 19.15, 0, -3);
-  block(19.15, -3, 0.3);
+  lamppost(p, 16.3, 0, -3);
+  block(16.3, -3, 0.3);
   // The way to your own door: stepping stones up from the lane, and a sign so you can find it.
   const doorX = X(HOME_DOOR);
   for (const [dx, z, w] of [[0.1, -3, 0.95], [-0.14, -3.45, 0.85], [0.08, -3.9, 0.9]] as const) p.add(pbox(w, 0.08, 0.42, 0.04, soft("#e6d6b8"), doorX + dx, 0.04, z));
@@ -505,26 +526,35 @@ export function buildVillage(ctx: BuildContext): VillageKit {
   for (const [dx, z, w] of [[0.1, -3.05, 1], [-0.12, -3.6, 0.9], [0.14, -4.15, 0.95], [-0.05, -4.75, 0.85], [0.1, -5.4, 0.8]] as const) p.add(pbox(w, 0.08, 0.4, 0.04, soft("#d8c9a8"), gateX + dx, 0.04, z));
 
   // --- Market Street ---
-  const BAKERY_X = 23.2;
+  const BAKERY_X = 20.2;
   bakery(p.sub(BAKERY_X, 0, FRONT), 5.5, 3.9, "#ffe1d4", "#8bbf74", 1.7);
-  workshop(p.sub(X(1650), 0, FRONT - 0.2), 4.9, 4.1, "#fde6a8", "#b986c9");
+  workshop(p.sub(X(1485), 0, FRONT - 0.2), 4.9, 4.1, "#fde6a8", "#b986c9");
   townhouse(p.sub(35.8, 0, -5.4), 2.7, 5, "#e3ecf7", "#e57b5f");
-  lamppost(p, X(1430), 0, -3.2);
+  // Tobin's second storefront, joined on to the workshop: one building, two shops.
+  const ext = p.sub(31.35, 0, FRONT - 0.2);
+  const EW = 3.8;
+  ext.add(rbox(EW, 4.1, 3.2, 0.25, soft("#fde6a8"), 0, 2.05, -1.6));
+  roofed(ext, gableShape(EW + 0.7, 1.25), 3.5, "#b986c9", 0, 4.05, -1.6);
+  ext.add(pbox(0.26, 4, 0.12, 0.06, soft("#d8b48a"), EW / 2 - 0.14, 2, 0.03));
+  textSign(ext, "FURNITURE", 0, 3.68, 0, 2.5, 0.52);
+  door(ext, X(SHOP_DOORS.furniture) - 31.35, 0, 1.3, 2.3, "#7a9a5a", "square");
+  for (const d of [-1.25, 1.25]) win(ext, d, 1.6, 0, 0.82, 1.5, { kind: "arch" });
+  lamppost(p, X(1265), 0, -3.2);
   lamppost(p, X(1860), 0, -3.2);
-  block(X(1430), -3.2, 0.3);
+  block(X(1265), -3.2, 0.3);
   block(X(1860), -3.2, 0.3);
-  teaCart(p.sub(X(1880), 0, VILLAGE_Z.teaCart - 0.1));
-  block(X(1880) - 0.8, VILLAGE_Z.teaCart, 0.85);
-  block(X(1880) + 0.8, VILLAGE_Z.teaCart, 0.85);
+  // Ash's cart.
+  const cartParts = new Parts();
+  teaCart(cartParts.sub(X(1880), 0, VILLAGE_Z.teaCart - 0.1));
+  const cartBlocks: Blocker[] = [-0.8, 0.8].map((d) => ({ X: X(1880) + d, Z: VILLAGE_Z.teaCart, r: 0.85 }));
+  blockers.push(...cartBlocks);
   p.spot(X(1880), 2.5, VILLAGE_Z.teaCart + 0.4, "#ffc98a", 14);
-  barrel(p, 21, -3.15);
-  barrel(p, 20.45, -3.35, 0.85);
-  crate(p, 26.75, -3.45, 1, 0.3);
-  crate(p, 27.15, -3.5, 0.75, 0.9);
-  s.bush(26.75, 0, -4.8, 0.7, GREENS[1], ["#fbe08a", "#f4b9c0"], 3);
-  s.bush(33.1, 0, -4.4, 0.75, GREENS[2], ["#f4b9c0", "#fffaf0", "#fbe08a"], 4);
-  pot(p, s, 21.9, -3.45, "#f6d36a");
-  pot(p, s, 32.75, -3.45, "#e98fb4");
+  barrel(p, 18, -3.15);
+  barrel(p, 17.45, -3.35, 0.85);
+  crate(p, 23.75, -3.45, 1, 0.3);
+  crate(p, 24.15, -3.5, 0.75, 0.9);
+  s.bush(23.75, 0, -4.8, 0.7, GREENS[1], ["#fbe08a", "#f4b9c0"], 3);
+  pot(p, s, 18.9, -3.45, "#f6d36a");
 
   // --- The Square ---
   const SQ = -8.2;
@@ -532,8 +562,8 @@ export function buildVillage(ctx: BuildContext): VillageKit {
   porchHouse(p.sub(51.5, 0, SQ), 3.8, 3.3, "#fff1d6", "#8bbf74");
   turretCottage(p.sub(56, 0, SQ - 0.1), 4.4, 3.6, "#e3ecf7", "#b986c9");
   stall(p.sub(47.3, 0, -8.8));
-  bench(p, X(2320), 0, -6.95);
-  bench(p, X(2810), 0, -6.95);
+  bench(p, 44.5, 0, -6.95);
+  bench(p, 53.6, 0, -6.95);
   block(X(2320) - 0.55, -6.95, 0.5);
   block(X(2320) + 0.55, -6.95, 0.5);
   block(X(2810) - 0.55, -6.95, 0.5);
@@ -557,6 +587,7 @@ export function buildVillage(ctx: BuildContext): VillageKit {
   block(FX, FZ, 2.5);
   // Flower beds and planters at the corners of the paving.
   for (const [x, z] of [[38.6, 6.4], [57.4, 6.4]]) {
+    if (nearTrail(x, z, 3.2)) continue;
     p.add(pipe(0.85, 0.95, 0.42, soft("#d8cfc0"), x, 0.21, z, 18));
     p.winter.add(dome(0.86, 0.3, 0.86, snowMat(), x, 0.42, z));
     s.blob(x, 0.56, z, 0.6, "#6ba65f");
@@ -602,14 +633,14 @@ export function buildVillage(ctx: BuildContext): VillageKit {
     if (distToTrail(x * 55, z, TRAILS.toMill) > 3) s.tree(x, gyAt(x, z), z, sc, GREENS[i % 4], i);
   });
   stoneWall(s, r, 59.4, 71.6, -4.4, 2);
-  for (const [x, z, sz] of [[60.8, -3.9, 0.5], [66.9, -4, 0.42], [72.2, -3.95, 0.58], [73.1, -4.2, 0.4]]) s.put("boulder", x, gyAt(x, z) + sz * 0.5, z, sz * 1.2, sz, sz, "#c8bdca");
+  for (const [x, z, sz] of [[60.8, -3.9, 0.5], [66.9, -4, 0.42], [72.2, -3.95, 0.58], [73.1, -4.2, 0.4]]) if (!nearTrail(x, z, 3)) s.put("boulder", x, gyAt(x, z) + sz * 0.5, z, sz * 1.2, sz, sz, "#c8bdca");
   bench(p, 64.2, gyAt(64.2, -3.95), -3.95);
   block(63.65, -3.95, 0.5);
   block(64.75, -3.95, 0.5);
   // A worn stone step or two in the track as it climbs.
   for (let x = 59.5; x < 74; x += 1.25) {
     const z = 0.5 * Math.sin((x - 58) * 0.22) + (r() - 0.5) * 1.6;
-    s.put("pebble", x, gyAt(x, z) + 0.02, z, 0.42, 0.07, 0.24, "#e6d3a8", r());
+    if (!nearTrail(x, z, 2.2)) s.put("pebble", x, gyAt(x, z) + 0.02, z, 0.42, 0.07, 0.24, "#e6d3a8", r());
   }
 
   // The hollow: a soft rock with a real mouth you can stand in.
@@ -682,7 +713,7 @@ export function buildVillage(ctx: BuildContext): VillageKit {
   });
   // Trees fill everything behind the buildings; none on top of a house.
   const clear = (x: number, z: number) => !houses.some(([hx, hz, w]) => Math.abs(x - hx) < w / 2 + 1.8 && z < hz + 2 && z > hz - 6);
-  for (const [x, z, sc] of [[-0.4, -6.4, 1.1], [19.8, -4.4, 0.8], [26.9, -6.8, 1.15], [37.9, -7.6, 1.15], [57.9, -7.8, 1.1], [3, -8.8, 1.3], [7.2, -9, 1.2], [11, -10.2, 1.3], [20.6, -10, 1.3], [33.3, -8.8, 1.2], [37.2, -11, 1.3], [44.2, -12.2, 1.35], [49.3, -11.8, 1.3], [53, -13, 1.3]]) {
+  for (const [x, z, sc] of [[-0.4, -6.4, 1.1], [16.7, -4.6, 0.8], [26.9, -6.8, 1.15], [37.9, -7.6, 1.15], [57.9, -7.8, 1.1], [3, -8.8, 1.3], [7.2, -9, 1.2], [11, -10.2, 1.3], [20.6, -10, 1.3], [33.3, -8.8, 1.2], [37.2, -11, 1.3], [44.2, -12.2, 1.35], [49.3, -11.8, 1.3], [53, -13, 1.3]]) {
     s.tree(x, gyAt(x, z), z, sc, GREENS[Math.floor(r() * 4)], r() * 6);
   }
   for (let i = 0; i < 150; i++) {
@@ -768,7 +799,7 @@ export function buildVillage(ctx: BuildContext): VillageKit {
   const buntingParts = new Parts();
   // Strung between two poles of its own, either side of the workshop, so it's always tied to something.
   const flagZ = -3.1;
-  const flagPoles = [27, 32.45];
+  const flagPoles = [24, 29.45];
   for (const x of flagPoles) {
     buntingParts.add(pipe(0.07, 0.11, 5.7, soft("#a8784e"), x, 2.85, flagZ), pipe(0.17, 0.2, 0.22, soft("#d8cdb4"), x, 0.11, flagZ), dot(0.12, soft("#f2c44a", 0.4), x, 5.76, flagZ));
   }
@@ -822,10 +853,6 @@ export function buildVillage(ctx: BuildContext): VillageKit {
 
   // The village between stories: a row of chapter lanterns in the Square, and things to change your look and home.
   const hubParts = new Parts();
-  const mirrorX = X(USABLES.mirror.x);
-  const mirrorPost = hubParts.sub(mirrorX, 0, USABLES.mirror.z! - 0.6);
-  mirrorPost.add(pbox(1.1, 2, 0.12, 0.3, soft("#b9895e"), 0, 1.15, 0), pbox(0.86, 1.72, 0.04, 0.26, own("#cfe7f0", { roughness: 0.12, metalness: 0.35 }), 0, 1.15, 0.07));
-  textSign(mirrorPost, "YOUR LOOK", 0, 0.12, 0.14, 1.2, 0.3);
   const potsPost = hubParts.sub(X(USABLES.paint_pots.x), 0, USABLES.paint_pots.z! - 0.6);
   (["#e57b5f", "#7a9fd0", "#8bbf74"] as const).forEach((c, i) => {
     const pot = cyl(0.26, 0.24, 0.42, soft("#c4ccd4", 0.4), -0.56 + i * 0.56, 0.21, 0);
@@ -833,21 +860,27 @@ export function buildVillage(ctx: BuildContext): VillageKit {
     pot.userData.keep = paint.userData.keep = true;
     potsPost.add(pot, paint);
   });
-  potsPost.add(pipe(0.05, 0.07, 1.5, soft("#7c5a42"), 0, 0.75, -0.3));
-  textSign(potsPost, "YOUR HOME", 0, 1.35, -0.26, 1.2, 0.3);
   // Mara's swap shelf and Juno's nature table, in the Square.
   const shelf = hubParts.sub(X(USABLES.swap_shelf.x), 0, USABLES.swap_shelf.z! - 0.9);
   for (const d of [-0.9, 0.9]) shelf.add(pbox(0.5, 0.7, 0.5, 0.05, soft("#b9895e"), d, 0.35, 0));
   shelf.add(pbox(2.4, 0.1, 0.62, 0.03, soft("#d9b285"), 0, 0.76, 0));
   for (const [dx, c] of [[-0.7, "#6a4a84"], [-0.2, "#f4c9b8"], [0.3, "#e4edf2"], [0.8, "#f6f1e4"]] as const) shelf.add(dot(0.13, soft(c), dx, 0.92, 0));
-  textSign(shelf, "LEAVE ONE, TAKE ONE", 0, 0.42, 0.3, 1.1, 0.24);
+  textSign(shelf, "LEAVE ONE, TAKE ONE", 0, 0.42, 0.3, 1.9, 0.26);
   const table = hubParts.sub(X(USABLES.nature_table.x), 0, USABLES.nature_table.z! - 0.9);
   for (const dx of [-1, 1]) for (const dz of [-0.36, 0.36]) table.add(pipe(0.05, 0.06, 0.82, soft("#8a5f3e"), dx, 0.41, dz));
   table.add(pbox(2.3, 0.1, 0.96, 0.04, soft("#c98a5e"), 0, 0.86, 0));
   textSign(table, "NATURE TABLE", 0, 1.5, -0.44, 1.5, 0.3);
   table.add(pipe(0.04, 0.05, 1.2, soft("#7c5a42"), 0, 1, -0.5));
+  // Signs for the shops that had none.
+  textSign(hubParts.sub(5.45, 0, -3.72), "NELL'S SEWING", 0, 2.7, 0, 2.3, 0.4);
+  // Ash is at the tea room now, and says so.
+  textSign(hubParts.sub(X(1880), 0, VILLAGE_Z.teaCart + 0.75), "AT THE MILL", 0, 0.95, 0, 1.5, 0.32);
   const hubScene = bake(hubParts.base);
   group.add(hubScene);
+
+  const cartScene = new THREE.Group();
+  cartScene.add(bake(cartParts.base), bake(cartParts.summer));
+  group.add(cartScene);
 
   // Your home.
   const homeSpot = new THREE.Group();
