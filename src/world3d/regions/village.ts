@@ -701,8 +701,13 @@ export function buildVillage(ctx: BuildContext): VillageKit {
 
   // --- Story props ---
   const buntingParts = new Parts();
-  const eave = VILLAGE_Z.teaCart - 0.1;
-  bunting(buntingParts, [[24.6, 5.05, eave], [X(PROPS.street_bunting.x) + 2, 5.55, eave], [35.3, 5.65, eave]], 0.34);
+  // Strung between two poles of its own, either side of the workshop, so it's always tied to something.
+  const flagZ = -3.1;
+  const flagPoles = [27, 32.45];
+  for (const x of flagPoles) {
+    buntingParts.add(pipe(0.07, 0.11, 5.7, soft("#a8784e"), x, 2.85, flagZ), pipe(0.17, 0.2, 0.22, soft("#d8cdb4"), x, 0.11, flagZ), dot(0.12, soft("#f2c44a", 0.4), x, 5.76, flagZ));
+  }
+  bunting(buntingParts, [[flagPoles[0], 5.45, flagZ], [flagPoles[1], 5.45, flagZ]], 0.3);
   const nellSnow = new Parts();
   const nx = X(PROPS.nell_snow.x);
   for (const [dx, y, dz, rx, ry, rz] of [[-1.3, 0.1, 0, 1.25, 0.72, 0.85], [0, 0.1, 0.05, 1.5, 1.05, 1], [1.35, 0.1, -0.05, 1.3, 0.8, 0.85], [0.5, 0.75, 0, 0.8, 0.5, 0.6]]) {
