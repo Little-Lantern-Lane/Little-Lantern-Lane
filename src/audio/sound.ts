@@ -79,7 +79,7 @@ interface Engine {
   noise: AudioBuffer;
 }
 
-type AudioCtor = new () => AudioContext;
+type AudioCtor = new (options?: AudioContextOptions) => AudioContext;
 
 function findAudioContext(): AudioCtor | undefined {
   const g = globalThis as unknown as { AudioContext?: AudioCtor; webkitAudioContext?: AudioCtor };
@@ -110,7 +110,9 @@ function makeImpulse(ctx: AudioContext, seconds: number): AudioBuffer {
 }
 
 function buildEngine(Ctor: AudioCtor, settings: Settings): Engine {
-  const ctx = new Ctor();
+  // A bigger output buffer: nothing here needs split-second timing, and the default small one
+  // crackles when a busy scene (the woods) starves the audio thread.
+  const ctx = new Ctor({ latencyHint: "playback" });
   const limiter = ctx.createDynamicsCompressor();
   limiter.threshold.value = -14;
   limiter.knee.value = 8;
@@ -491,9 +493,16 @@ function composerFor(mood: Exclude<Mood, "silent">): Composer {
 // ---------------------------------------------------------------------------
 // Mood player: owns one composer's output gain and its place in time.
 
-const LOOKAHEAD = 0.25;
+// Long enough to ride out a slow frame or a heavy scene change without the music running dry.
+const LOOKAHEAD = 1.2;
 const TICK_MS = 50;
 const LONGEST_TAIL = 14; // seconds: long drones scheduled just before a fade
+
+/** When the next step plays. A note scheduled in the past would start partway through its
+ *  envelope, which is a click, so anything late moves just ahead of now. */
+export function catchUp(next: number, now: number): number {
+  return next < now ? now + 0.05 : next;
+}
 
 class MoodPlayer {
   private out: GainNode;
@@ -519,8 +528,7 @@ class MoodPlayer {
   tick(): void {
     if (this.stopped) return;
     const now = this.e.ctx.currentTime;
-    // After a throttled tab, skip ahead instead of firing a burst of notes.
-    if (this.next < now - 0.2) this.next = now + 0.05;
+    this.next = catchUp(this.next, now);
     while (this.next < now + LOOKAHEAD) {
       this.c.step(this.e, this.out, this.n, this.next);
       this.next += this.c.stepDur;

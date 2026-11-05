@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createSound, type Mood, type Sfx } from "../src/audio/sound";
+import { catchUp, createSound, type Mood, type Sfx } from "../src/audio/sound";
 
 const MOODS: Mood[] = ["day", "night", "shame", "hollow", "festival", "silent"];
 const SFX: Sfx[] = [
@@ -83,5 +83,30 @@ describe("sound without AudioContext", () => {
     expect(s.volume).toBe(0.6);
     expect(() => s.setVolume(0.4)).not.toThrow();
     expect(s.volume).toBe(0.4);
+  });
+});
+
+describe("playback that holds up under load", () => {
+  it("asks for the larger output buffer", () => {
+    stubStorage();
+    let options: AudioContextOptions | undefined;
+    vi.stubGlobal("AudioContext", class {
+      constructor(o?: AudioContextOptions) {
+        options = o;
+        throw new Error("no audio in tests");
+      }
+    });
+    createSound().unlock();
+    expect(options?.latencyHint).toBe("playback");
+  });
+
+  it("never schedules a note in the past", () => {
+    expect(catchUp(9.9, 10)).toBeGreaterThan(10);
+    expect(catchUp(2, 10)).toBeGreaterThan(10);
+  });
+
+  it("leaves a note that's on time alone", () => {
+    expect(catchUp(10.5, 10)).toBe(10.5);
+    expect(catchUp(10, 10)).toBe(10);
   });
 });

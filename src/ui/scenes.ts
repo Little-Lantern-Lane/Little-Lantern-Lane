@@ -274,7 +274,7 @@ export function runSaveScene(panel: HTMLElement, finished: string, next: string,
       closePanel(panel);
       resolve("continue");
     });
-    const rest = button("Take a break", "ghost", () => {
+    const rest = button("Back to the village", "ghost", () => {
       closePanel(panel);
       resolve("break");
     });
@@ -287,7 +287,7 @@ export function runSaveScene(panel: HTMLElement, finished: string, next: string,
         {
           class: "save-note",
           text: saved
-            ? `Your progress is saved in this browser. You can close the tab now and come back any time: choose "Continue" on the title screen to start ${next}.`
+            ? `Your progress is saved in this browser, so you can close the tab and come back any time. Whoever has the bright speech bubble in the village will start ${next}.`
             : "This browser isn't letting the game save (a private window can do this), so progress will be lost if you close the tab.",
         },
       ),

@@ -16,7 +16,7 @@ Then open http://localhost:8140. Tests: `npm test`. Types: `npm run typecheck`.
 
 Between chapters three and four there's a week with nothing wrong in it: woods past Lantern Lane, a river, a bridge
 to mend, and a second forest over it. Gather fruit, mushrooms and stones, fish, make things at your table, sell to
-villagers, give gifts, and buy clothes and things for your house. Jump to it from the title screen.
+villagers, give gifts, and buy clothes and things for your house. Every part of the story can be started from the village map (M), and the townsfolk start the next one in order.
 
 ## How it is built
 

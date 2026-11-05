@@ -440,6 +440,21 @@ describe("long chains", () => {
 });
 
 describe("rare choices", () => {
+  const atFestival = (memory: string, who: RegExp) => {
+    const engine = new Engine(json, "main");
+    engine.setVar(memory, true);
+    engine.startAt("festival");
+    engine.continueBatch();
+    engine.choose(engine.choices.find((c) => who.test(c.text))!.index);
+    engine.continueBatch();
+    return engine.choices.map((c) => c.text);
+  };
+
+  it("what you told Nell, and what Mara told you, can come up at the festival", () => {
+    expect(atFestival("nell_not_me", /Nell/)).toContain("Remind her what you said this afternoon");
+    expect(atFestival("mara_grandma", /Mara/)).toContain("Ask about her grandmother");
+  });
+
   it("having noticed Wren's back, you can ask about it at the festival", () => {
     const engine = new Engine(json, "main");
     engine.setVar("wren_back", true);

@@ -109,7 +109,7 @@ export function describeCharacter(c: CharacterChoice): string {
 }
 
 /** The player (as currently dressed) drawn on its own. */
-function playerSVG(expr: Expression = "neutral", cls = "") {
+export function playerSVG(expr: Expression = "neutral", cls = "") {
   return `<svg class="${cls}" xmlns="http://www.w3.org/2000/svg" viewBox="${VIEWBOX.x} ${VIEWBOX.y + 14} ${VIEWBOX.w} ${VIEWBOX.h - 8}" aria-hidden="true">${characterMarkup("you", expr)}</svg>`;
 }
 

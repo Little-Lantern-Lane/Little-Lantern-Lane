@@ -16,7 +16,7 @@ export const HOME_DOOR = 740;
 export const INTERIOR = { x0: 4800, x1: 6080 };
 
 export interface Area {
-  id: "lane" | "street" | "square" | "hill" | "workshop" | "home" | "millpath" | "teashop" | "quay" | "shore" | "wood" | "river" | "farbank" | "bedroom" | "sitting" | "cellar";
+  id: "lane" | "street" | "square" | "hill" | "workshop" | "home" | "millpath" | "teashop" | "quay" | "shore" | "wood" | "river" | "farbank" | "bedroom" | "sitting" | "cellar" | "beach";
   name: string;
   x0: number;
   x1: number;
@@ -44,6 +44,8 @@ export const AREAS: Area[] = [
   { id: "bedroom", name: "Your bedroom", x0: 20600, x1: 21500 },
   { id: "sitting", name: "The side room", x0: 21700, x1: 22600 },
   { id: "cellar", name: "The cellar", x0: 22800, x1: 23700 },
+  // Down from the Square to the sea.
+  { id: "beach", name: "Lantern Sands", x0: 24000, x1: 28400 },
 ];
 
 /** The woods: you walk east from the gate. The river runs across your way; the bridge is the only crossing. */
@@ -87,6 +89,7 @@ export const REGIONS = [
   { id: "bedroom", x0: 20600, x1: 21500, min: 20640, max: 21460 },
   { id: "sitting", x0: 21700, x1: 22600, min: 21740, max: 22560 },
   { id: "cellar", x0: 22800, x1: 23700, min: 22840, max: 23660 },
+  { id: "beach", x0: 24000, x1: 28400, min: 24060, max: 28340 },
 ] as const;
 export type Region = (typeof REGIONS)[number];
 
@@ -116,8 +119,23 @@ export const ZONES: Record<string, { x0: number; x1: number; label: string; auto
   mill_path: { x0: 8060, x1: 8140, label: "the path home", auto: true },
 };
 
+/** Every part of the story, as lanterns on the map. All of them are always open. */
+export const LANTERN_ROW: { id: string; name: string; plate: string; knot?: string; variant?: "promise" }[] = [
+  { id: "lantern_1", name: "Lantern Night", plate: "1" },
+  { id: "lantern_1b", name: "The borrowed lantern", plate: "1b", variant: "promise" },
+  { id: "lantern_2", name: "The morning after", plate: "2", knot: "start_day_two" },
+  { id: "lantern_3", name: "The storm", plate: "3", knot: "start_storm" },
+  { id: "lantern_far", name: "The far bank", plate: "Far", knot: "start_woods" },
+  { id: "lantern_4", name: "Opening day", plate: "4", knot: "start_mill" },
+  { id: "lantern_5", name: "The first snow", plate: "5", knot: "start_snow" },
+  { id: "lantern_6", name: "The tide", plate: "6", knot: "start_coast" },
+];
+
 /** Things a `#use:` choice can name. */
-export const USABLES: Record<string, { x: number; label: string }> = {
+export const USABLES: Record<string, { x: number; label: string; z?: number }> = {
+  // The village where every game starts.
+  mirror: { x: 640, z: -2.2, label: "the mirror" },
+  paint_pots: { x: 860, z: -2.2, label: "the paint pots" },
   lantern_table: { x: 5530, label: "the lanterns" },
   stone: { x: 2470, label: "the loose stone" },
   heap: { x: 2610, label: "the lanterns" },
@@ -149,17 +167,94 @@ const snowNight = (w: WorldState) => w.level === 5 && w.time === "night";
  */
 export function canEnterHome(w: WorldState): boolean {
   if (snowNight(w)) return true;
-  return (w.level <= 3 || w.level === 7) && w.form === "person" && !w.pull && !laneBlocked(w);
+  return (w.level <= 3 || w.level === 7 || w.level === 8) && w.form === "person" && !w.pull && !laneBlocked(w);
 }
 
 /** Wider than the way in, so nothing can shut you inside. */
 export function canLeaveHome(w: WorldState): boolean {
-  return snowNight(w) || w.level <= 3 || w.level === 7;
+  return snowNight(w) || w.level <= 3 || w.level === 7 || w.level === 8;
 }
 
+/** The path down to the beach, at the far corner of the Square. The sands run along the sea. */
+export const BEACH = { x0: 24000, x1: 28400, arrive: 24640, gate: 24560, gateZ: 8, water: -14, back: 20 };
+
+/** Every place you can walk to when you're free, with the sign that points the way. */
+const free = (w: WorldState) => w.level === 8;
+
+/** How close to the end of a path you need to walk for it to take you onward. */
+export const PATH_REACH = 1.3;
+
+/** A path on the ground, as [x, z] points from where it starts to where it leaves. */
+export type Trail = [number, number][];
+const HALF_PATH = 1.5;
+
+export const TRAILS = {
+  toBeach: [[2990, 3], [3080, 6.4], [3130, 10], [3140, 14.5]],
+  toMill: [[3260, 0], [3330, -3.2], [3390, -7], [3400, -11.5]],
+  toWoods: [[300, 0.2], [130, -1.4], [110, -3.2], [110, -7.2]],
+  woodsExit: [[14540, 0], [14300, -0.6], [14290, -2.6], [14290, -5]],
+  beachExit: [[24700, 8], [24640, 14], [24660, 20], [24640, 26]],
+  shore: [[27900, 8], [28080, 13], [28060, 20], [28080, 26]],
+  millExit: [[8340, 0.4], [8080, 0.4]],
+  coastExit: [[11320, 0], [11085, 0]],
+} satisfies Record<string, Trail>;
+
+/** How far a spot is from a path's middle, in world units. */
+export function distToTrail(x: number, z: number, t: Trail): number {
+  let best = Infinity;
+  for (let i = 1; i < t.length; i++) {
+    const [ax, az] = [t[i - 1][0] / 55, t[i - 1][1]];
+    const [bx, bz] = [t[i][0] / 55, t[i][1]];
+    const [px, pz] = [x / 55, z];
+    const k = Math.max(0, Math.min(1, ((px - ax) * (bx - ax) + (pz - az) * (bz - az)) / ((bx - ax) ** 2 + (bz - az) ** 2)));
+    best = Math.min(best, Math.hypot(px - ax - k * (bx - ax), pz - az - k * (bz - az)));
+  }
+  return best;
+}
+
+export const onTrail = (x: number, z: number, t: Trail) => distToTrail(x, z, t) <= HALF_PATH;
+const endOf = (t: Trail) => ({ x: t[t.length - 1][0], z: t[t.length - 1][1] - (t[t.length - 1][1] > t[t.length - 2][1] ? 0.5 : t[t.length - 1][1] < t[t.length - 2][1] ? -0.5 : 0), trail: t, path: true });
+
+/** Where the map stands in each place, and where it takes you. */
+export const MAP_BOARDS: { x: number; z: number }[] = [
+  { x: 2330, z: 5 }, { x: 860, z: 3.8 }, { x: 14420, z: -2 }, { x: 18000, z: 2.5 }, { x: 24820, z: 8 }, { x: 8380, z: -3 }, { x: 11300, z: -3 },
+];
+/** The signs that show the walking routes, in the village between stories. */
+export const WALK_SIGNS: { x: number; z: number; text: string; always?: boolean }[] = [
+  { x: 2960, z: 1.2, text: "TO THE BEACH →", always: true },
+  { x: 3235, z: -2.9, text: "TO THE MILL →" },
+  { x: 8130, z: -3.1, text: "← TO THE VILLAGE" },
+  { x: 27800, z: 5.4, text: "TO SALTMOUTH →" },
+  { x: 11280, z: -3.1, text: "← TO THE BEACH" },
+];
+
+/** Places on the map you can go to, by name, as [x, z]. */
+export const MAP_PLACES: Record<string, { name: string; x: number; z: number }> = {
+  lane: { name: "Lantern Lane", x: 700, z: 1 },
+  street: { name: "Market Street", x: 1500, z: 1 },
+  square: { name: "The Square", x: 2500, z: 3 },
+  hill: { name: "The Hill", x: 3900, z: 0 },
+  wood: { name: "Hazel Wood", x: 14400, z: 0 },
+  farbank: { name: "The Far Bank", x: 17800, z: 0 },
+  beach: { name: "Lantern Sands", x: 24900, z: 6 },
+  mill: { name: "The Mill", x: 8400, z: 0 },
+  saltmouth: { name: "Saltmouth", x: 11300, z: 0 },
+};
+
+/** Who starts the next part of the story, keyed by the chapter a save leads into. */
+export const NEXT_GIVER: Record<number, { who: string; line: string }> = {
+  1: { who: "mara", line: "Mara's looking for you in the Square." },
+  2: { who: "nell", line: "Nell's looking for you on Lantern Lane." },
+  3: { who: "mara", line: "Mara's looking for you in the Square." },
+  7: { who: "mara", line: "Mara's looking for you in the Square." },
+  4: { who: "ash", line: "Ash has something to ask you, on Market Street." },
+  5: { who: "oda", line: "Oda's looking for you at the bakery." },
+  6: { who: "tobin", line: "Tobin's looking for you on Market Street." },
+};
+
 /** Paths to the woods from the two chapters that don't happen in the village. */
-export const MILL_PATH = 8270;
-export const COAST_PATH = 11190;
+export const MILL_PATH = 8200;
+export const COAST_PATH = 11210;
 
 /**
  * The woods are open from every chapter, whenever you're free to wander. Not during the moments the
@@ -174,7 +269,7 @@ export function canVisitWoods(w: WorldState): boolean {
 const inVillageChapter = (w: WorldState) => w.level !== 4 && w.level !== 6;
 
 /** Doors between places. `when` limits a door to when it can be used; `z` is where it stands if not the back of the path; `toZ` is where you land. */
-export const DOORS: { x: number; z?: number; to: number; toZ?: number; label: string; when?: (w: WorldState) => boolean; needs?: "bedroom" | "sitting" | "cellar" }[] = [
+export const DOORS: { x: number; z?: number; to: number; toZ?: number; label: string; when?: (w: WorldState) => boolean; needs?: "bedroom" | "sitting" | "cellar"; path?: boolean; trail?: Trail }[] = [
   { x: 1650, to: 5210, label: "Go into the workshop" },
   { x: 5170, to: 1650, label: "Go out to Market Street" },
   { x: HOME_DOOR, to: 6510, toZ: -1.4, label: "Go into your house", when: canEnterHome },
@@ -186,13 +281,20 @@ export const DOORS: { x: number; z?: number; to: number; toZ?: number; label: st
   { x: 21780, to: 7560, toZ: 0.9, label: "Go back to the main room" },
   { x: 6560, z: 1.7, to: 22920, toZ: -1, label: "Go down to the cellar", needs: "cellar" },
   { x: 22880, to: 6620, toZ: 1.7, label: "Go back up" },
-  { x: LANE_GATE, to: WOODS.gate + 70, toZ: 0, label: "Go through to the woods", when: (w) => inVillageChapter(w) && canVisitWoods(w) },
-  { x: MILL_PATH, to: WOODS.gate + 70, toZ: 0, label: "Take the path to the woods", when: (w) => w.level === 4 && canVisitWoods(w) },
-  { x: COAST_PATH, to: WOODS.gate + 70, toZ: 0, label: "Take the road to the woods", when: (w) => w.level === 6 && canVisitWoods(w) },
+  // Paths: walk along one to the end and you're there. The Hill leads to the mill, the sands to Saltmouth.
+  { ...endOf(TRAILS.toMill), to: 8240, toZ: 0.4, label: "Walk down to the mill", when: free },
+  { ...endOf(TRAILS.millExit), to: 3380, toZ: -6.5, label: "Walk back up to the village", when: free },
+  { ...endOf(TRAILS.shore), to: 11230, toZ: 0, label: "Follow the shore to Saltmouth", when: free },
+  { ...endOf(TRAILS.coastExit), to: 28070, toZ: 16, label: "Walk back along the shore", when: free },
+  { ...endOf(TRAILS.toBeach), to: BEACH.arrive, toZ: 14, label: "Go down to the beach", when: (w) => inVillageChapter(w) && canVisitWoods(w) },
+  { ...endOf(TRAILS.beachExit), to: 3100, toZ: 8, label: "Go back up to the Square" },
+  { ...endOf(TRAILS.toWoods), to: WOODS.gate + 150, toZ: 0, label: "Go through to the woods", when: (w) => inVillageChapter(w) && canVisitWoods(w) },
+  { ...endOf(TRAILS.millExit), to: WOODS.gate + 150, toZ: 0, label: "Take the path to the woods", when: (w) => w.level === 4 && canVisitWoods(w) },
+  { ...endOf(TRAILS.coastExit), to: WOODS.gate + 150, toZ: 0, label: "Take the road to the woods", when: (w) => w.level === 6 && canVisitWoods(w) },
   // The way back goes wherever the chapter is, and is never shut.
-  { x: WOODS.gate, z: -1.4, to: LANE_GATE + 60, toZ: -1, label: "Go back to Lantern Lane", when: inVillageChapter },
-  { x: WOODS.gate, z: -1.4, to: MILL_PATH + 40, toZ: 0, label: "Go back to the mill", when: (w) => w.level === 4 },
-  { x: WOODS.gate, z: -1.4, to: COAST_PATH + 40, toZ: 0, label: "Go back to the harbour", when: (w) => w.level === 6 },
+  { ...endOf(TRAILS.woodsExit), to: 150, toZ: -1.2, label: "Go back to Lantern Lane", when: inVillageChapter },
+  { ...endOf(TRAILS.woodsExit), to: 8240, toZ: 0.4, label: "Go back to the mill", when: (w) => w.level === 4 },
+  { ...endOf(TRAILS.woodsExit), to: 11230, toZ: 0, label: "Go back to the harbour", when: (w) => w.level === 6 },
 ];
 
 /** One thing growing or lying in the woods. `shape` says how the woods draw it. */
@@ -201,7 +303,7 @@ export interface GatherNode {
   item: ItemId;
   x: number;
   z: number;
-  shape: "tree" | "bramble" | "cap" | "rock" | "log" | "birch";
+  shape: "tree" | "bramble" | "cap" | "rock" | "log" | "birch" | "shell" | "weed" | "grass";
   tool?: Tool;
 }
 
@@ -243,6 +345,20 @@ export const FISHING_SPOTS = ([[-30, "near"], [-9, "near"], [20, "near"], [-22, 
   return { id: `fish${i}`, x: mid + dir * (RIVER_HALF + 40), z, floatX: mid + dir * 50, floatZ: z + 0.4, bank };
 });
 
+const sand = (item: ItemId, shape: GatherNode["shape"], spots: [number, number][], tool?: Tool): GatherNode[] => spots.map(([x, z], i) => ({ id: `sea_${item}${i}`, item, x, z, shape, tool }));
+
+/** What washes up and grows along the sands. Shells and weed near the water, samphire by the dunes, glass among the rocks. */
+export const BEACH_NODES: GatherNode[] = [
+  ...sand("shell", "shell", [[24700, -6], [25300, -9], [25900, -5], [26400, -10], [27000, -7], [27600, -9], [28000, -4]]),
+  ...sand("seaweed", "weed", [[24900, -11], [25600, -11.5], [26200, -7], [26900, -11], [27400, -12], [28100, -10]]),
+  ...sand("samphire", "grass", [[24600, 12], [25500, 14], [26300, 10], [27100, 15], [27900, 11]]),
+  ...sand("seaglass", "rock", [[25100, 2], [26700, -2], [27800, 4]], "hammer"),
+  ...sand("driftwood", "log", [[25000, 6], [26100, 3], [27300, 8]]),
+];
+
+/** The rocks and the end of the pier, for fishing the open sea. */
+export const BEACH_SPOTS = ([[25400, -13.4], [26400, -13.4], [27500, -13.4]] as const).map(([x, z], i) => ({ id: `sea${i}`, x, z, floatX: x + 30, floatZ: z - 5, bank: "sea" as const }));
+
 /** You can't step into the river. Only the bridge, once it's built, gets you across. */
 export function woodsLimit(x: number, z: number, bridge: boolean): number {
   if (bridge && Math.abs(z) <= WOODS.bridgeHalf) return x;
@@ -266,9 +382,10 @@ export const POLES = [2180, 2920];
 
 export type Phase =
   | "afternoon" | "after" | "night" | "festival" | "approach" | "day2" | "storm"
-  | "mill_morning" | "mill_party" | "snow_evening" | "snow_night" | "snow_dawn" | "coast" | "coast_dusk" | "woods";
+  | "mill_morning" | "mill_party" | "snow_evening" | "snow_night" | "snow_dawn" | "coast" | "coast_dusk" | "woods" | "hub";
 
 export function phaseOf(w: WorldState, approaching: boolean): Phase {
+  if (w.level === 8) return "hub";
   if (w.level === 7) return "woods";
   if (w.level === 4) return w.time === "night" ? "mill_party" : "mill_morning";
   if (w.level === 5) return w.time === "morning" ? "snow_dawn" : w.time === "night" ? "snow_night" : "snow_evening";
@@ -305,6 +422,8 @@ export const NPC_SPOTS: Record<Phase, Spots> = {
   coast: { fen: 11500, tobin: 11640, hesketh: 12620 },
   coast_dusk: { fen: 11860, tobin: 11960, hesketh: 12240 },
   // The week after the storm: Mara and Nell at the river, the kids in the wood, everyone else at work.
+  // The village between stories: everyone at their own place, ready to trade.
+  hub: { nell: 330, wren: 1240, oda: 1300, tobin: 1760, ash: 1880, mara: 2380, pip: 2980, juno: 3030 },
   woods: { mara: 16700, nell: 16880, pip: 15000, juno: 15060, ash: 1880, wren: 1240, oda: 1300, tobin: 1760 },
 };
 
@@ -319,6 +438,7 @@ export const PLAYER_SPOTS: Record<WorldState["location"], number> = {
   coast: 11200,
   shed: 12700,
   bridge: 17220,
+  hub: 2300,
 };
 
 /**

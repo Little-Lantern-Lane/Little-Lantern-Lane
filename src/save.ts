@@ -4,7 +4,7 @@
 
 import type { GameState } from "./logic/state";
 import type { Variant } from "./logic/facts";
-import { normalizeBag } from "./logic/bag";
+import { normalizeBag, type BagState } from "./logic/bag";
 import { BOUGHT_CLOTHES, normalizeCharacter, normalizeHome, type CharacterChoice, type HomeChoice } from "./logic/appearance";
 
 const KEY = "lantern-night:save";
@@ -75,6 +75,27 @@ export const CHAPTER_NAMES: Record<SaveGame["chapter"], string> = {
   6: "chapter six: The tide",
   7: "the week after: The far bank",
 };
+
+// --- What you've gathered ------------------------------------------------------------
+// Your bag belongs to you, not to one game: the woods are open from anywhere and you can start any chapter.
+
+const BAG_KEY = "lantern-night:bag";
+
+export function writeBag(bag: BagState, store: Storage | null = storage()): void {
+  try {
+    store?.setItem(BAG_KEY, JSON.stringify(bag));
+  } catch {
+    // It just won't last past this visit.
+  }
+}
+
+export function readBag(store: Storage | null = storage()): BagState {
+  try {
+    return normalizeBag(JSON.parse(store?.getItem(BAG_KEY) ?? "null"));
+  } catch {
+    return normalizeBag(null);
+  }
+}
 
 // --- Your look and your home --------------------------------------------------------
 // Kept apart from the chapter save: starting over keeps how you look and your home.

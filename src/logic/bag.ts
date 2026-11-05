@@ -5,7 +5,7 @@
 import type { CharacterChoice, Decor } from "./appearance";
 import type { GameEvent } from "./tags";
 
-export type ItemKind = "fruit" | "mushroom" | "mineral" | "fish" | "material" | "made";
+export type ItemKind = "fruit" | "mushroom" | "mineral" | "fish" | "material" | "made" | "sea";
 export type Tool = "rod" | "hammer";
 
 export const ITEMS = {
@@ -25,6 +25,12 @@ export const ITEMS = {
   trout: { name: "Trout", kind: "fish", price: 16, note: "Comes up if you let it." },
   eel: { name: "Silver eel", kind: "fish", price: 20, note: "Lives under the far bank." },
   carp: { name: "Old carp", kind: "fish", price: 34, note: "Older than the bridge. Takes its time." },
+  mackerel: { name: "Mackerel", kind: "fish", price: 12, note: "Striped and in a hurry." },
+  bass: { name: "Sea bass", kind: "fish", price: 26, note: "Worth the wait." },
+  shell: { name: "Scallop shell", kind: "mineral", price: 6, note: "Ribbed like a little fan." },
+  seaglass: { name: "Sea glass", kind: "mineral", price: 18, note: "A bottle, once. The sea took the edges off." },
+  seaweed: { name: "Seaweed", kind: "sea", price: 5, note: "Salty, and better than it looks." },
+  samphire: { name: "Samphire", kind: "sea", price: 11, note: "Grows where the dunes meet the salt." },
   driftwood: { name: "Driftwood", kind: "material", price: 3, note: "The storm left plenty." },
   birch_bark: { name: "Birch bark", kind: "material", price: 4, note: "Peels away like paper." },
   jam: { name: "Bramble jam", kind: "made", price: 30, note: "Apple and blackberry." },
@@ -32,6 +38,8 @@ export const ITEMS = {
   charm: { name: "Stone charm", kind: "made", price: 28, note: "Quartz on a strip of birch." },
   tart: { name: "Plum tart", kind: "made", price: 40, note: "Plums and apples." },
   moon_tea: { name: "Moon tea", kind: "made", price: 52, note: "Tastes like the far bank." },
+  shell_chime: { name: "Shell chime", kind: "made", price: 34, note: "Clinks in any kind of wind." },
+  sea_broth: { name: "Sea broth", kind: "made", price: 44, note: "Tastes of the whole beach." },
   pendant: { name: "Skyglass pendant", kind: "made", price: 70, note: "Copper wire around blue stone." },
 } as const satisfies Record<string, { name: string; kind: ItemKind; price: number; note: string }>;
 
@@ -46,6 +54,8 @@ export const RECIPES: { makes: ItemId; needs: Partial<Record<ItemId, number>> }[
   { makes: "tart", needs: { plum: 2, apple: 1 } },
   { makes: "moon_tea", needs: { moonberry: 1, bluecap: 1 } },
   { makes: "pendant", needs: { skyglass: 1, copper: 1 } },
+  { makes: "shell_chime", needs: { shell: 2, seaglass: 1 } },
+  { makes: "sea_broth", needs: { mackerel: 1, seaweed: 1, samphire: 1 } },
 ];
 
 /** Tools you can make yourself, from what lies about in Hazel Wood. Nell and Tobin also hand them over. */
@@ -61,7 +71,7 @@ export const LANTERN_NEEDS: Partial<Record<ItemId, number>> = { birch_bark: 2, g
 export type Buyer = "ash" | "wren" | "tobin" | "nell";
 /** Who wants what, and why they're buying it, in the villager's own trade. */
 export const BUYERS: Record<Buyer, ItemKind[]> = {
-  ash: ["mushroom", "made"],
+  ash: ["mushroom", "sea", "made"],
   wren: ["fruit", "made"],
   tobin: ["mineral", "made"],
   nell: ["fish", "made"],
@@ -116,12 +126,14 @@ export interface BagState {
   gathered: number;
   /** The `gathered` count when you last gave each person something. */
   gaveAt: Partial<Record<Friend, number>>;
+  /** What you've built in the world, kept from game to game like the bag itself. */
+  built: string[];
 }
 
 /** Gather this many more things before giving the same person another gift, so gifts stay gifts. */
 export const GIFT_GAP = 5;
 
-export const initialBag = (): BagState => ({ items: {}, coins: 0, found: [], tools: [], gathered: 0, gaveAt: {} });
+export const initialBag = (): BagState => ({ items: {}, coins: 0, found: [], tools: [], gathered: 0, gaveAt: {}, built: [] });
 
 export const countOf = (b: BagState, id: ItemId) => b.items[id] ?? 0;
 
@@ -178,9 +190,11 @@ export function sellable(b: BagState, who: Buyer | "stall"): ItemId[] {
 }
 
 export const BAG_EVENTS = new Set(["tool", "use_items", "woods_goal"]);
+const BUILT = ["bridge", "bridge_lantern"];
 
 /** Story events: `tool rod` hands you something; `use_items bridge` or `use_items lantern` spends what those take. */
 export function applyBagEvent(b: BagState, ev: GameEvent): BagState {
+  if (ev.name === "prop" && ev.arg?.startsWith("on:") && BUILT.includes(ev.arg.slice(3)) && !b.built.includes(ev.arg.slice(3))) return { ...b, built: [...b.built, ev.arg.slice(3)] };
   if (ev.name === "tool") {
     if (ev.arg !== "rod" && ev.arg !== "hammer") throw new Error(`Unknown tool: ${ev.arg}`);
     return b.tools.includes(ev.arg) ? b : { ...b, tools: [...b.tools, ev.arg] };
@@ -194,7 +208,8 @@ export function applyBagEvent(b: BagState, ev: GameEvent): BagState {
 }
 
 /** What's on the line. A nibble is a small fish; let it go by and the real pull brings a better one. */
-export function fishFor(bank: "near" | "far", pull: "nibble" | "pull"): ItemId {
+export function fishFor(bank: "near" | "far" | "sea", pull: "nibble" | "pull"): ItemId {
+  if (bank === "sea") return pull === "nibble" ? "mackerel" : "bass";
   if (bank === "near") return pull === "nibble" ? "perch" : "trout";
   return pull === "nibble" ? "eel" : "carp";
 }
@@ -203,5 +218,5 @@ export function fishFor(bank: "near" | "far", pull: "nibble" | "pull"): ItemId {
 export function normalizeBag(raw: unknown): BagState {
   const r = (raw ?? {}) as Partial<BagState>;
   const d = initialBag();
-  return { ...d, ...r, items: { ...r.items }, found: Array.isArray(r.found) ? r.found.filter(isItem) : [], tools: Array.isArray(r.tools) ? r.tools : [], gaveAt: { ...r.gaveAt } };
+  return { ...d, ...r, items: { ...r.items }, found: Array.isArray(r.found) ? r.found.filter(isItem) : [], tools: Array.isArray(r.tools) ? r.tools : [], gaveAt: { ...r.gaveAt }, built: Array.isArray(r.built) ? r.built : [] };
 }

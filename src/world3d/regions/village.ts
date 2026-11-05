@@ -4,10 +4,10 @@
 // looking toward -Z) always sees the player.
 
 import * as THREE from "three";
-import { EDGE_X, FOUNTAIN_X, HOME_DOOR, LANE_GATE, POLES, PROPS, USABLES, ZONES } from "../../game/layout";
+import { distToTrail, EDGE_X, FOUNTAIN_X, HOME_DOOR, LANE_GATE, POLES, PROPS, TRAILS, USABLES, ZONES } from "../../game/layout";
 import type { HomeChoice } from "../../logic/appearance";
 import type { WorldState } from "../../logic/world";
-import { ball, LANTERN_COLOURS, own, rbox, soft } from "../kit";
+import { ball, cyl, LANTERN_COLOURS, own, rbox, soft } from "../kit";
 import { worldX } from "../space";
 import type { Blocker, BuildContext, LightSpot, RegionKit } from "../types";
 import { buildHome, disposeHome, type HomeMarks } from "./home3d";
@@ -61,12 +61,60 @@ function textSign(p: Parts, text: string, x: number, y: number, z: number, w: nu
   p.winter.add(pbox(w + h * 0.5, 0.1, 0.2, 0.05, snowMat(), x, y + h / 2 + 0.05, z + 0.06));
 }
 
-/** A post pointing the way to the woods, for the chapters away from the village. */
-export function woodsPost(x: number, z: number): THREE.Group {
+/** A post pointing the way somewhere. */
+export function signPost(x: number, z: number, text: string): THREE.Group {
   const p = new Parts();
   const post = p.sub(x, 0, z);
   post.add(pipe(0.07, 0.09, 2.3, soft("#7c5a42"), 0, 1.15, -0.06));
-  textSign(post, "TO THE WOODS", 0, 2.05, 0, 2.1, 0.4);
+  textSign(post, text, 0, 2.05, 0, 2.3, 0.4);
+  return bake(p.base);
+}
+
+export const woodsPost = (x: number, z: number) => signPost(x, z, "TO THE WOODS");
+
+/** A worn path on the ground: a dirt ribbon with a softer edge, following `heightAt` so it lies on the land. */
+export function groundTrail(pts: [number, number][], heightAt: (X: number, z: number) => number, offsetZ: number, colour = "#d9bf94", edge = "#c4a878"): THREE.Group {
+  const g = new THREE.Group();
+  const curve = new THREE.CatmullRomCurve3(pts.map(([x, z]) => new THREE.Vector3(worldX(x), 0, z)));
+  const n = Math.max(24, Math.round(curve.getLength() * 3));
+  const ribbon = (half: number, lift: number, col: string) => {
+    const pos: number[] = [];
+    const idx: number[] = [];
+    for (let i = 0; i <= n; i++) {
+      const c = curve.getPoint(i / n);
+      const t = curve.getTangent(i / n);
+      const [nx, nz] = [-t.z, t.x];
+      const wobble = half + Math.sin(i * 0.9) * 0.12 + Math.sin(i * 0.37) * 0.1;
+      for (const d of [-1, 1]) {
+        const [x, z] = [c.x + nx * wobble * d, c.z + nz * wobble * d];
+        pos.push(x, heightAt(x, z) + lift, z + offsetZ);
+      }
+      if (i) {
+        const a = (i - 1) * 2;
+        idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    geo.setIndex(idx);
+    geo.computeVertexNormals();
+    const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: col, roughness: 1, side: THREE.DoubleSide }));
+    m.receiveShadow = true;
+    return m;
+  };
+  g.add(ribbon(1.65, 0.035, edge), ribbon(1.25, 0.05, colour));
+  return g;
+}
+
+/** A board with the map on it, standing in each place. */
+export function mapBoard(x: number, z: number): THREE.Group {
+  const p = new Parts();
+  const post = p.sub(x, 0, z);
+  for (const d of [-0.85, 0.85]) post.add(pipe(0.07, 0.09, 2.5, soft("#7c5a42"), d, 1.25, -0.08));
+  post.add(pbox(2.1, 1.45, 0.1, 0.06, soft("#8a5f3e"), 0, 1.75, -0.02), pbox(1.86, 1.2, 0.04, 0.03, soft("#f3e2bb"), 0, 1.75, 0.05));
+  for (const [dx, dy, c] of [[-0.55, 0.2, "#e9583c"], [-0.1, -0.2, "#f2b54a"], [0.35, 0.25, "#4fa3a0"], [0.6, -0.3, "#c94f6d"]] as const) post.add(dot(0.08, soft(c), dx, 1.75 + dy, 0.09));
+  post.add(pbox(1.5, 0.05, 0.03, 0.01, soft("#b08a5e"), 0, 1.74, 0.08));
+  textSign(post, "MAP", 0, 2.66, 0.02, 0.8, 0.3);
   return bake(p.base);
 }
 
@@ -392,6 +440,7 @@ export function buildVillage(ctx: BuildContext): VillageKit {
   // Ground.
   const ground = groundMesh();
   const groundMat = ground.material as THREE.MeshStandardMaterial;
+  const nearTrail = (x: number, z: number) => distToTrail(x * 55, z, TRAILS.toBeach) < 3.2 || distToTrail(x * 55, z, TRAILS.toMill) < 3.2 || distToTrail(x * 55, z, TRAILS.toWoods) < 2.6;
   const summerMap = summerGround();
   let snowMap: THREE.CanvasTexture | null = null;
   groundMat.map = summerMap;
@@ -537,7 +586,9 @@ export function buildVillage(ctx: BuildContext): VillageKit {
 
   // --- The Hill ---
   const hillTrees: [number, number, number][] = [[62.5, -5.2, 1.2], [68.4, -5.6, 1.35], [79.2, -4.6, 1.15], [65.2, -7.2, 1.25], [71.8, -6.4, 1.15], [59.8, -6, 1]];
-  hillTrees.forEach(([x, z, sc], i) => s.tree(x, gyAt(x, z), z, sc, GREENS[i % 4], i));
+  hillTrees.forEach(([x, z, sc], i) => {
+    if (distToTrail(x * 55, z, TRAILS.toMill) > 3) s.tree(x, gyAt(x, z), z, sc, GREENS[i % 4], i);
+  });
   stoneWall(s, r, 59.4, 71.6, -4.4, 2);
   for (const [x, z, sz] of [[60.8, -3.9, 0.5], [66.9, -4, 0.42], [72.2, -3.95, 0.58], [73.1, -4.2, 0.4]]) s.put("boulder", x, gyAt(x, z) + sz * 0.5, z, sz * 1.2, sz, sz, "#c8bdca");
   bench(p, 64.2, gyAt(64.2, -3.95), -3.95);
@@ -654,18 +705,20 @@ export function buildVillage(ctx: BuildContext): VillageKit {
   for (let x = 38; x < 58.4; x += 0.62) {
     if (Math.abs(x - 48) < 1.9) continue;
     const z = 8.5 + Math.sin(x * 0.7) * 0.1;
+    if (nearTrail(x, z)) continue;
     s.blob(x, 0.2, z, 0.42, Math.floor(x * 3) % 4 ? "#62a05e" : "#6ba65f");
     if (r() < 0.32) s.put("flower", x, 0.48, z + 0.26, 0.08, 0.08, 0.08, BLOOMS[Math.floor(r() * 5)]);
   }
   for (let i = 0; i < 60; i++) {
     const x = -2 + r() * 84;
     const z = 7.2 + r() * 8;
-    if (x > 37 && x < 59 && z < 9.6) continue;
+    if ((x > 37 && x < 59 && z < 9.6) || nearTrail(x, z)) continue;
     s.bush(x, gyAt(x, z), z, 0.42 + r() * 0.22, GREENS[Math.floor(r() * 4)], r() < 0.6 ? [BLOOMS[Math.floor(r() * 5)], BLOOMS[Math.floor(r() * 5)]] : [], i);
   }
 
   // Grass, flowers and pebbles over everything green.
   const onGrass = (x: number, z: number) => {
+    if (nearTrail(x, z)) return false;
     if (x >= 36 && x < 59.4) return z > 8.2 || z < -8.6;
     if (x >= 59.4) return Math.abs(z - 0.5 * Math.sin((x - 58) * 0.22)) > 2;
     return z > 5.2 || z < -3.4;
@@ -751,6 +804,27 @@ export function buildVillage(ctx: BuildContext): VillageKit {
     pr.g.visible = false;
     group.add(pr.g);
   }
+
+  // Paths leave the village through gaps in the green.
+  for (const [x, z] of [[X(2860), 7.6], [X(3010), 12], [X(3290), 9], [X(3320), 13]] as const) s.bush(x, gyAt(x, z), z, 0.95, GREENS[0], ["#fbe08a", "#f4b9c0"], 8);
+
+  // The village between stories: a row of chapter lanterns in the Square, and things to change your look and home.
+  const hubParts = new Parts();
+  const mirrorX = X(USABLES.mirror.x);
+  const mirrorPost = hubParts.sub(mirrorX, 0, USABLES.mirror.z! - 0.6);
+  mirrorPost.add(pbox(1.1, 2, 0.12, 0.3, soft("#b9895e"), 0, 1.15, 0), pbox(0.86, 1.72, 0.04, 0.26, own("#cfe7f0", { roughness: 0.12, metalness: 0.35 }), 0, 1.15, 0.07));
+  textSign(mirrorPost, "YOUR LOOK", 0, 0.12, 0.14, 1.2, 0.3);
+  const potsPost = hubParts.sub(X(USABLES.paint_pots.x), 0, USABLES.paint_pots.z! - 0.6);
+  (["#e57b5f", "#7a9fd0", "#8bbf74"] as const).forEach((c, i) => {
+    const pot = cyl(0.26, 0.24, 0.42, soft("#c4ccd4", 0.4), -0.56 + i * 0.56, 0.21, 0);
+    const paint = cyl(0.23, 0.23, 0.03, soft(c), -0.56 + i * 0.56, 0.43, 0);
+    pot.userData.keep = paint.userData.keep = true;
+    potsPost.add(pot, paint);
+  });
+  potsPost.add(pipe(0.05, 0.07, 1.5, soft("#7c5a42"), 0, 0.75, -0.3));
+  textSign(potsPost, "YOUR HOME", 0, 1.35, -0.26, 1.2, 0.3);
+  const hubScene = bake(hubParts.base);
+  group.add(hubScene);
 
   // Your home.
   const homeSpot = new THREE.Group();
@@ -838,6 +912,7 @@ export function buildVillage(ctx: BuildContext): VillageKit {
       flies.visible = w.time === "night" && w.weather === "clear";
       for (const pr of props) pr.g.visible = (PROPS[pr.name].shown?.(w) ?? false) || w.props.includes(pr.name);
       const ploughOut = w.props.includes("plough");
+      hubScene.visible = w.level === 8;
       const has = blockers.includes(ploughBlock[0]);
       if (ploughOut && !has) blockers.push(...ploughBlock);
       if (!ploughOut && has) for (const b of ploughBlock) blockers.splice(blockers.indexOf(b), 1);

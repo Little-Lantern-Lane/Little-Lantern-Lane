@@ -47,6 +47,7 @@ VAR breaths = 0           // set by the breathing scene: slow breaths taken
 VAR lost = false
 VAR next_chapter = 0      // which chapter a save point leads into
 // The week after the storm
+VAR next_giver = "mara"   // set by the TS layer: who starts the next part of the story
 VAR woods_stage = 0       // 0 mending the bridge, 1 the far bank is open, 2 the lantern is hung
 VAR has_rod = false
 VAR has_hammer = false
@@ -1668,6 +1669,153 @@ oda: Take a roll for the road.
 = bye
 pip/laugh: BYE!
 ->->
+
+// ---------------------------------------------------------------------------
+// The village, where every game starts. Whoever the story needs next has a bright
+// speech bubble (`next_giver`, set by the TS layer), and talking to them starts the
+// next chapter. The map jumps to any chapter. Nothing here changes the chapters.
+
+=== village_hub ===
+- (h)
++ [Change how you look #use: mirror]
+    -> hub_look -> h
++ [Change your home #use: paint_pots]
+    -> hub_home -> h
++ {next_giver == "nell"} [Talk to Nell #talk: nell #new]
+    -> hub_nell -> h
++ {next_giver != "nell"} [Talk to Nell #talk: nell]
+    -> hub_nell -> h
++ {next_giver == "tobin"} [Talk to Tobin #talk: tobin #new]
+    -> hub_tobin -> h
++ {next_giver != "tobin"} [Talk to Tobin #talk: tobin]
+    -> hub_tobin -> h
++ {next_giver == "ash"} [Talk to Ash #talk: ash #new]
+    -> hub_ash -> h
++ {next_giver != "ash"} [Talk to Ash #talk: ash]
+    -> hub_ash -> h
++ {next_giver == "oda"} [Talk to the bakers #talk: wren #new]
+    -> hub_bakers -> h
++ {next_giver != "oda"} [Talk to the bakers #talk: wren]
+    -> hub_bakers -> h
++ {next_giver == "mara"} [Talk to Mara #talk: mara #new]
+    -> hub_mara -> h
++ {next_giver != "mara"} [Talk to Mara #talk: mara]
+    -> hub_mara -> h
++ [Talk to Pip and Juno #talk: pip]
+    -> hub_kids -> h
+
+=== start_next ===
+You set off. #scene: startpart
++ [·] ->->
+
+=== hub_look ===
+You have a look at yourself. #scene: look
++ [·] ->->
+
+=== hub_home ===
+You think about the house. #scene: homelook
++ [·] ->->
+
+=== hub_nell ===
+{ next_giver == "nell":
+    nell/warm: There you are. You look like you've been up all night. There's a lot to do today.
+- else:
+    nell/smile: There you are. Sit down if you're stopping.
+}
+- (menu)
++ {next_giver == "nell"} ["I'm ready."]
+    -> start_next -> menu
++ [Sell her some fish]
+    -> sell_to("nell") -> menu
++ ["Do you make clothes?"]
+    nell/smile: I make everything. Most of it's in this basket.
+    -> shop_with("nell") -> menu
++ {can_gift("nell")} [Give Nell something]
+    -> gift_to("nell") -> menu
++ [Off you go]
+    ->->
+
+=== hub_tobin ===
+{ next_giver == "tobin":
+    tobin: Hesketh sent a letter. The sea's been rough at Saltmouth. Will you come with me?
+- else:
+    tobin/laugh: Mind the glue. What can I do for you?
+}
+- (menu)
++ {next_giver == "tobin"} ["I'm ready."]
+    -> start_next -> menu
++ [Sell him some stones]
+    -> sell_to("tobin") -> menu
++ ["Could you make something for my house?"]
+    tobin/smile: I've been hoping someone would ask that.
+    -> shop_with("tobin") -> menu
++ ["Have you got any furniture?"]
+    ~ trade_with = "furniture"
+    tobin: Have a look. If you'd rather make it yourself, I won't be offended. Press F at home.
+    -> shop_with("furniture") -> menu
++ {can_gift("tobin")} [Give Tobin something]
+    -> gift_to("tobin") -> menu
++ [Let him get on]
+    ->->
+
+=== hub_ash ===
+{ next_giver == "ash":
+    ash/worried: It's today. I open at noon. Can you come early?
+- else:
+    ash/smile: Anything you've dried, steeped or found under a tree, I'll take it.
+}
+- (menu)
++ {next_giver == "ash"} ["I'm ready."]
+    -> start_next -> menu
++ [Sell Ash some mushrooms]
+    -> sell_to("ash") -> menu
++ {can_gift("ash")} [Give Ash something]
+    -> gift_to("ash") -> menu
++ [Leave Ash to it]
+    ->->
+
+=== hub_bakers ===
+{ next_giver == "oda":
+    oda/worried: Snow's coming in hard, and Hettie's on nights. Could you be home this evening?
+- else:
+    wren/smile: Fruit's welcome. Windfalls are fine, they're going in a pie.
+}
+- (menu)
++ {next_giver == "oda"} ["I'm ready."]
+    -> start_next -> menu
++ [Sell the bakers some fruit]
+    -> sell_to("wren") -> menu
++ {can_gift("wren")} [Give Wren something]
+    -> gift_to("wren") -> menu
++ {can_gift("oda")} [Give Oda something]
+    -> gift_to("oda") -> menu
++ [Leave them to the ovens]
+    ->->
+
+=== hub_mara ===
+{ next_giver == "mara":
+    mara/warm: There you are. I was hoping I'd see you. Have you got a minute?
+- else:
+    mara/warm: I've made a list of things to do today. It's a short list. I'm trying that.
+}
+- (menu)
++ {next_giver == "mara"} ["I'm ready."]
+    -> start_next -> menu
++ {can_gift("mara")} [Give Mara something]
+    -> gift_to("mara") -> menu
++ [Leave her to it]
+    ->->
+
+=== hub_kids ===
+pip/happy: We're EXPLORING. Juno's counting.
+juno: There are twelve lanterns on the string. I checked.
+- (menu)
++ {can_gift("pip")} [Give Pip something]
+    -> gift_to("pip") -> menu
++ {can_gift("juno")} [Give Juno something]
+    -> gift_to("juno") -> menu
++ [Let them explore]
+    ->->
 
 // ---------------------------------------------------------------------------
 // The week after the storm: the far bank. After three chapters of getting

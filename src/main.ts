@@ -11,18 +11,19 @@ import type { Completeness } from "./logic/outcome";
 import type { GameEvent } from "./logic/tags";
 import { createSound, type Sfx } from "./audio/sound";
 import { World3D, type SceneHooks } from "./world3d/World";
-import { FISHING_SPOTS, GROUND_Y, NODES, riverMidX } from "./game/layout";
+import { FISHING_SPOTS, GROUND_Y, NEXT_GIVER, NODES, riverMidX } from "./game/layout";
 import { createDialogueBox } from "./ui/dialogue";
 import { createHud } from "./ui/hud";
 import { createMeterView } from "./ui/meter";
 import { factCard, runBreathScene, runChainScene, runCheckInScene, runFitScene, runMendScene, runSaveScene, runSayItScene } from "./ui/scenes";
-import { CHAPTER_NAMES, clearSave, readLooks, readSave, writeLooks, writeSave, type Looks, type SaveChapter, type SaveGame } from "./save";
+import { CHAPTER_NAMES, clearSave, readBag, readLooks, readSave, writeBag, writeLooks, writeSave, type Looks, type SaveChapter, type SaveGame } from "./save";
 import { buildAddition, DEFAULT_CHARACTER, DEFAULT_HOME, growRoom, hasAddition, remainingAdditions, type Decor } from "./logic/appearance";
 import { addPiece, canPlace, FURNITURE, place, putAway, turnPiece, type Furnishings, type FurnitureId } from "./logic/furniture";
-import { canAfford, canGift, countOf, craft, gather, give, ITEMS, makeTool, normalizeBag, pay, sell, spendItems, type BagState, type Buyer, type Friend, type ItemId } from "./logic/bag";
+import { canAfford, canGift, countOf, craft, gather, give, ITEMS, makeTool, pay, sell, spendItems, type BagState, type Buyer, type Friend, type ItemId } from "./logic/bag";
 import { COIN, itemIcon } from "./ui/items";
+import { runMapScene, type MapPick } from "./ui/map";
 import { runBagScreen, runCraftScene, runFurnishScene, runGiftScene, runSellScene, runShopScene, runStallScene, type ShopRow } from "./ui/trade";
-import { applyCharacter, runCharacterScreen, runGrowScene, runHomeScreen } from "./ui/wardrobe";
+import { applyCharacter, playerSVG, runCharacterScreen, runGrowScene, runHomeScreen } from "./ui/wardrobe";
 import { PlaytestLog } from "./playtest";
 
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -99,6 +100,7 @@ const CHAPTERS: Record<number, { title: string; goal: string; meter: [Ends, Ends
   4: { title: "Chapter four: Opening day", goal: "Help Ash open the tea room.", meter: [["Tense", "At ease"], ["Just say yes", "Say what I mean"]] },
   5: { title: "Chapter five: The first snow", goal: "Get Pip and Juno through the night.", meter: [["Worried", "Settled"], ["Check the road", "Stay with the kids"]] },
   6: { title: "Chapter six: The tide", goal: "Help Tobin and Hesketh with the shed.", meter: [["Hurting", "Okay"], ["Fight it", "Let it be"]] },
+  8: { title: "Lantern Night", goal: "Mara's looking for you in the Square.", meter: [["Feeling bad", "Feeling good"], ["Want to hide", "Be with people"]] },
   7: { title: "The week after: The far bank", goal: "Mend the footbridge: 6 driftwood and 2 ironstone, for Mara at the river.", meter: [["Restless", "Content"], ["Get it done", "Be in it"]] },
 };
 
@@ -124,9 +126,9 @@ const hooks: SceneHooks = {
   sound,
   onArea: (a) => {
     hud.showArea(a.name);
-    hud.showTurn(a.id === "wood" || a.id === "river" || a.id === "farbank", (by) => world?.turnCamera(by));
+    hud.showTurn(a.id === "wood" || a.id === "river" || a.id === "farbank" || a.id === "beach", (by) => world?.turnCamera(by));
     furnishButton.hidden = !["home", "bedroom", "sitting", "cellar"].includes(a.id);
-    inWoods = a.id === "wood" || a.id === "river" || a.id === "farbank";
+    inWoods = a.id === "wood" || a.id === "river" || a.id === "farbank" || a.id === "beach";
     paintBag();
   },
   onApproachEvent: (name, arg) => apply({ name, arg }),
@@ -134,6 +136,7 @@ const hooks: SceneHooks = {
   touch,
   bag: () => state.bag,
   onStall: () => void useStall(),
+  onMap: () => void openMap(),
   onGather(item, fish) {
     setBag(gather(state.bag, item));
     gatherNote(item, fish ? "Landed" : `In your bag: ${countOf(state.bag, item)}`);
@@ -158,16 +161,29 @@ function gatherNote(item: ItemId, line: string) {
 
 function setBag(bag: BagState) {
   state = { ...state, bag };
+  writeBag(bag);
   paintBag();
 }
 
 let inWoods = false;
+let mapButton: HTMLButtonElement;
+const villageButton = document.createElement("button");
+villageButton.className = "hud-village";
+villageButton.textContent = "Back to the village";
+villageButton.hidden = true;
+villageButton.addEventListener("click", () => {
+  if (window.confirm("Go back to the village? You'll pick up from your last save.")) location.reload();
+});
+$("#hud").append(villageButton);
 const bagButton = document.createElement("button");
 bagButton.className = "hud-bag";
 bagButton.hidden = true;
 $("#hud").append(bagButton);
 function paintBag() {
-  bagButton.hidden = state.world.level !== 7 && state.bag.found.length === 0 && !inWoods;
+  bagButton.hidden = state.world.level !== 7 && state.world.level !== 8 && state.bag.found.length === 0 && !inWoods;
+  document.body.classList.toggle("in-hub", state.world.level === 8);
+  villageButton.hidden = state.world.level === 8;
+  mapButton.hidden = state.world.level !== 8;
   bagButton.innerHTML = `<span>Bag (B)</span><span class="coins">${COIN}${state.bag.coins}</span>`;
 }
 
@@ -204,13 +220,31 @@ async function useStall() {
   if (bagFree) world?.setLocked(false);
 }
 
+/** M, or a map board: go anywhere you've been able to reach, or start any part of the story. */
+async function openMap() {
+  if (!world || state.world.level !== 8 || !panel.hidden || !bagFree) return;
+  world.setLocked(true);
+  const pick = await runMapScene(panel, state.world.props.includes("bridge"));
+  if (bagFree) world.setLocked(false);
+  if (pick?.kind === "place") world.travel(pick.x, pick.z);
+  if (pick?.kind === "part") leaveVillage?.(pick);
+}
+let leaveVillage: ((part: Extract<MapPick, { kind: "part" }>) => void) | null = null;
+
 /** True while you're free to walk about, so the bag doesn't open over a conversation. */
 let bagFree = false;
 bagButton.addEventListener("click", () => void openBag());
 addEventListener("keydown", (e) => {
   if (e.code === "KeyB" && !e.repeat) void openBag();
   if (e.code === "KeyF" && !e.repeat) void openFurnish();
+  if (e.code === "KeyM" && !e.repeat) void openMap();
 });
+mapButton = document.createElement("button");
+mapButton.className = "hud-bag hud-map";
+mapButton.textContent = "Map (M)";
+mapButton.hidden = true;
+mapButton.addEventListener("click", () => void openMap());
+$("#hud").append(mapButton);
 const furnishButton = document.createElement("button");
 furnishButton.className = "hud-bag hud-furnish";
 furnishButton.textContent = "Furnish (F)";
@@ -285,6 +319,7 @@ function apply(ev: GameEvent) {
     console.warn(err);
     return;
   }
+  if (ev.name === "tool" || ev.name === "use_items" || ev.name === "prop") writeBag(state.bag);
   world?.applyState(state.world);
   world?.setFeeling(state.meter.distress);
   meter.render(state.meter);
@@ -299,18 +334,39 @@ function apply(ev: GameEvent) {
   }
 }
 
-function bootWorld(): Promise<World3D> {
-  // A new game gets a fresh world, so a changed look or home shows.
+const loader = $("#loader");
+const nextFrame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+function showLoader() {
+  $("#loader-you").innerHTML = playerSVG("happy");
+  $("#loader-go").hidden = true;
+  $("#loader-note").textContent = "Lighting the lanterns…";
+  loader.classList.remove("gone");
+  loader.hidden = false;
+}
+
+function hideLoader() {
+  loader.classList.add("gone");
+  window.setTimeout(() => (loader.hidden = true), 480);
+}
+
+async function bootWorld(): Promise<World3D> {
+  // A new game gets a fresh world, so a changed look or home shows. Building it takes a moment,
+  // and the loading screen's animation keeps moving while it does.
+  showLoader();
+  await nextFrame();
   world?.dispose();
   world = new World3D($("#game"), hooks, state.world, looks.home);
-  return Promise.resolve(world);
+  await nextFrame();
+  hideLoader();
+  return world;
 }
 
 /** Let the player walk to a world choice, or click a plain one. */
 function waitForChoice(choices: StoryChoice[]): Promise<StoryChoice> {
   const inWorld = choices.filter((c) => c.target);
   const plain = choices.filter((c) => !c.target);
-  hud.setNext(choices);
+  hud.setNext(state.world.level === 8 ? [] : choices);
   bagFree = inWorld.length > 0;
   if (inWorld.length === 0) {
     world!.setLocked(true);
@@ -339,12 +395,23 @@ const FINISHED: Record<SaveChapter, string> = { 2: "Chapter one", 3: "Chapter tw
 async function play(chosen: Variant, from?: string, resume?: SaveGame) {
   variant = resume?.variant ?? chosen;
   state = resume?.game ?? initialState();
-  state = { ...state, bag: normalizeBag(state.bag) };
+  // Your bag is yours, whichever game you're in, and so is what you've built with it.
+  const bag = readBag();
+  state = { ...state, bag, world: { ...state.world, props: [...new Set([...state.world.props, ...bag.built])] } };
+  const inVillage = from === "village_hub";
+  if (inVillage) {
+    state = applyEvent(state, { name: "chapter", arg: "8" });
+  }
   meter.render(state.meter);
   showChapter(state.world.level);
   const engine = new Engine(await storyJson, variant, () => state.meter.distress, () => state.bag);
   if (resume) engine.loadState(resume.story);
   else if (from) engine.startAt(from);
+  if (inVillage) {
+    const next = NEXT_GIVER[readSave()?.chapter ?? 1];
+    engine.setVar("next_giver", next.who);
+    hud.setGoal(next.line);
+  }
   const log = new PlaytestLog(variant);
   await bootWorld();
   hud.onHeadUp((on) => world!.setHeadUp(on));
@@ -380,8 +447,7 @@ async function play(chosen: Variant, from?: string, resume?: SaveGame) {
       const choice = await runSaveScene(panel, FINISHED[next], CHAPTER_ORDINAL[next], saved);
       if (choice === "break") {
         log.record("break", { chapter: next });
-        sound.setMood("silent");
-        showTitle();
+        void begin("main", "village_hub");
         return;
       }
       continue;
@@ -436,6 +502,16 @@ async function play(chosen: Variant, from?: string, resume?: SaveGame) {
         hud.controls("hang");
         await world!.runSecure();
         hud.controls("hidden");
+      } else if (scene === "startpart") {
+        // Whoever has the bright bubble starts the next part: your save if you've one, or the beginning.
+        const save = readSave();
+        void (save ? begin(save.variant, undefined, save) : begin("main"));
+        return;
+      } else if (scene === "look") {
+        await chooseCharacter();
+      } else if (scene === "homelook") {
+        await chooseHome();
+        await world?.refreshHome(looks.home);
       } else if (scene === "sell") {
         await runSellScene(panel, engine.getVar("trade_with") as Buyer, () => state.bag, (id) => {
           setBag(sell(state.bag, id));
@@ -443,8 +519,9 @@ async function play(chosen: Variant, from?: string, resume?: SaveGame) {
         });
       } else if (scene === "shop") {
         const who = String(engine.getVar("trade_with"));
-        await runShopScene(panel, who, () => state.bag, () => (who === "nell" ? looks.owned : ownedAtTobin()), buy);
-        if (who === "tobin") await runShopScene(panel, "furniture", () => state.bag, () => [], buy);
+        await runShopScene(panel, who, () => state.bag, () => (who === "nell" ? looks.owned : who === "tobin" ? ownedAtTobin() : []), buy);
+        if (who === "tobin" && state.world.level === 7) await runShopScene(panel, "furniture", () => state.bag, () => [], buy);
+
       } else if (scene === "craft") {
         await runCraftScene(panel, () => state.bag, (id) => {
           setBag(craft(state.bag, id));
@@ -479,7 +556,17 @@ async function play(chosen: Variant, from?: string, resume?: SaveGame) {
     }
 
     if (engine.ended) break;
-    const choice = await waitForChoice(engine.choices);
+    // In the village the map can start a chapter at any moment.
+    const exit = new Promise<{ part: Extract<MapPick, { kind: "part" }> }>((r) => (leaveVillage = (part) => r({ part })));
+    const picked = await Promise.race([waitForChoice(engine.choices), exit]);
+    leaveVillage = null;
+    if ("part" in picked) {
+      world?.clearTargets();
+      dialogue.hide();
+      void begin(picked.part.variant ?? "main", picked.part.knot);
+      return;
+    }
+    const choice = picked;
     log.record("choice", choice.text);
     engine.choose(choice.index);
     const said = /^"(.*)"$/.exec(choice.text);
@@ -501,10 +588,10 @@ function showEnd(log: PlaytestLog) {
   thanks.textContent = "Thank you for playing Lantern Night.";
   const again = document.createElement("button");
   again.className = "primary";
-  again.textContent = "Play again";
+  again.textContent = "Back to the village";
   again.addEventListener("click", () => {
     panel.hidden = true;
-    showTitle();
+    void begin("main", "village_hub");
   });
   const notes = document.createElement("button");
   notes.className = "ghost";
@@ -520,6 +607,7 @@ function showEnd(log: PlaytestLog) {
 
 /** The title screen, with a Continue button when there's a save to go back to. */
 function showTitle() {
+  hideLoader();
   const save = readSave();
   const row = $("#continue-row");
   row.hidden = !save;
@@ -576,7 +664,6 @@ $("#start-over").addEventListener("click", () => {
   clearSave();
   showTitle();
 });
-showTitle();
 window.addEventListener("pointerdown", () => sound.unlock(), { once: true });
 window.addEventListener("keydown", () => sound.unlock(), { once: true });
 
@@ -585,5 +672,27 @@ if (new URLSearchParams(location.search).has("debug")) {
   Object.assign(window, { lantern: { world: () => world, state: () => state, growHome, NODES, FISHING_SPOTS, riverMidX } });
 }
 
-const requested = new URLSearchParams(location.search).get("variant");
-if (requested === "main" || requested === "promise") begin(requested);
+/** The first thing you see: the lanterns light, and then you come in. ?title shows the old chapter list instead. */
+async function open() {
+  const params = new URLSearchParams(location.search);
+  const requested = params.get("variant");
+  if (requested === "main" || requested === "promise") return void begin(requested);
+  if (params.has("title")) return showTitle();
+  $("#loader-you").innerHTML = playerSVG("happy");
+  await storyJson;
+  await new Promise((r) => window.setTimeout(r, 1800));
+  $("#loader-note").textContent = "The village is ready for you.";
+  const go = $<HTMLButtonElement>("#loader-go");
+  go.hidden = false;
+  go.focus();
+  await new Promise<void>((resolve) => go.addEventListener("click", () => resolve(), { once: true }));
+  sound.unlock();
+  if (!chosenLooks) {
+    hideLoader();
+    await chooseCharacter();
+    await chooseHome();
+    chosenLooks = true;
+  }
+  void begin("main", "village_hub");
+}
+void open();

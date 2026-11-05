@@ -431,3 +431,38 @@ button.item-tile:disabled { opacity: 0.45; }
 .hud-turn { position: absolute; right: 1.4cqw; bottom: 5cqw; display: inline-flex; gap: 0.4em; align-items: center; pointer-events: auto; background: #241d2ee6; border: 1px solid var(--line); border-radius: 999px; padding: 0.2em 0.5em; font-size: max(12px, 1.1cqw); color: var(--muted); }
 .hud-turn button { background: transparent; border: 0; color: #f4ecdf; font-size: 1.5em; line-height: 1; padding: 0.1em 0.3em; cursor: pointer; }
 .hud-bag.hud-furnish { bottom: 5cqw; }
+
+/* The loading screen: lanterns light along a string while your character trots underneath. */
+#loader { position: absolute; inset: 0; z-index: 40; display: grid; place-items: center; background: radial-gradient(ellipse at 50% 30%, #2b2a5a, #120f1c 72%); text-align: center; transition: opacity 0.45s; }
+#loader.gone { opacity: 0; pointer-events: none; }
+.loader-card { width: min(70cqw, 820px); font-size: max(13px, 1.3cqw); }
+.loader-card h1 { font-family: var(--serif); font-weight: normal; font-size: 3.4em; color: var(--amber); margin: 0 0 0.3em; text-shadow: 0 0 24px #f2b54a55; }
+.loader-string { position: relative; width: 100%; aspect-ratio: 800 / 150; }
+.loader-string svg { position: absolute; inset: 0 0 auto 0; width: 100%; }
+.loader-string span { position: absolute; left: calc(8% + var(--i) * 12%); top: calc(var(--y) * 1% * 0.74 + 2%); width: 5.2%; aspect-ratio: 1 / 1.15; margin-left: -2.6%; border-radius: 46%; background: #3a3350; animation: lamp-on 0.6s ease-out forwards, lamp-sway 2.6s ease-in-out infinite; animation-delay: calc(var(--i) * 0.42s), calc(var(--i) * 0.2s); transform-origin: 50% -20%; }
+@keyframes lamp-on { to { background: var(--c); box-shadow: 0 0 22px 4px color-mix(in srgb, var(--c) 60%, transparent); } }
+@keyframes lamp-sway { 0%, 100% { rotate: -4deg; } 50% { rotate: 4deg; } }
+.loader-path { position: relative; height: 7.4em; overflow: hidden; border-bottom: 2px solid #4a4368; margin-bottom: 0.7em; }
+#loader-you { position: absolute; bottom: -2px; left: 0; height: 100%; aspect-ratio: 1; animation: you-trot 3.8s linear infinite alternate; }
+#loader-you svg { height: 100%; width: auto; animation: you-bob 0.34s ease-in-out infinite alternate; }
+@keyframes you-trot { from { left: 2%; } to { left: calc(98% - 7em); } }
+@keyframes you-bob { from { translate: 0 0; rotate: -3deg; } to { translate: 0 -6%; rotate: 3deg; } }
+#loader-note { color: var(--muted); margin: 0.2em 0 0.6em; font-family: var(--serif); }
+#loader-go { font-size: 1.2em; padding: 0.6em 2em; }
+.loader-card .small { color: var(--muted); font-size: 0.72em; line-height: 1.5; opacity: 0.85; margin-top: 1em; }
+@media (prefers-reduced-motion: reduce) { #loader-you, #loader-you svg, .loader-string span { animation-iteration-count: 1; } }
+.hud-village { position: absolute; left: 1.4cqw; bottom: 8.6cqw; pointer-events: auto; background: #241d2ee6; border: 1px solid var(--line); border-radius: 999px; padding: 0.35em 0.9em; color: inherit; font: inherit; font-size: max(12px, 1cqw); }
+body.in-hub #meter { display: none; }
+
+/* The village map */
+.panel-card.map-card { width: auto; max-width: 92cqw; align-items: center; }
+.map-svg { height: min(74cqh, 58cqw); width: auto; max-width: 100%; display: block; border-radius: 10px; }
+.map-go { cursor: pointer; }
+.map-go text { font: 22px Georgia, serif; fill: #5f4029; }
+.map-go:hover text, .map-go:focus-visible text { fill: #c44a2e; text-decoration: underline; }
+.map-go.shut text { fill: #a8957a; }
+.map-go.lamp:hover, .map-go.lamp:focus-visible { filter: brightness(1.15); }
+.map-go:focus { outline: none; }
+.panel-card.map-card > button { align-self: center; }
+.map-note { margin: 0; color: var(--muted); font-family: var(--serif); }
+.hud-bag.hud-map { bottom: 8.6cqw; }

@@ -134,6 +134,23 @@ what's on screen matches what's said.
   for once. They make one new lantern and hang it on the harbour wall. (DBT: radical
   acceptance, turning the mind, willing hands.)
 
+## The village start (2026-11-05)
+There's no menu. A loading screen lights a string of lanterns while your character trots underneath, then you come
+in and you're in the Square. Whoever the story needs next has a bright speech bubble, and talking to them starts the
+next part, picking up your save if you've one. Between stories the shops, your home, the woods and the beach are all
+open, and a mirror and paint pots on Lantern Lane change your look and home.
+
+The village map opens with M, and a board stands in every outdoor place. Click a place to go there, or a lantern to
+start any part of the story; all of them are open from the start. Everything on the map can also be reached on foot:
+the Hill leads down to the mill, and the sands lead along to Saltmouth. Internally the village is level 8 and the
+`village_hub` knot, and starting a part works exactly as the old title screen did, so the chapters are unchanged.
+Your bag and what you've built are kept between games. `?title` still shows the old chapter list.
+
+## Lantern Sands (2026-11-05)
+A beach down from the far corner of the Square, open like the woods, with its own fish (mackerel, sea bass), things to
+gather (shells, seaweed, samphire, sea glass, driftwood) and two things to make. It follows the same rules as the woods
+for when it's open.
+
 ## The far bank (2026-11-04)
 A new part between chapters three and four, in the week before Ash opens: the woods past Lantern Lane, a
 river, and a second forest over it. After three chapters of getting through hard days, a week with nothing

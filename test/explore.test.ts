@@ -90,8 +90,10 @@ function walk(variant: Variant, start: string | null, seed: number, taken: Taken
   const engine = new Engine(json, variant, () => state.meter.distress, () => (carrying || steps > 150 ? fullBag : initialBag()));
   if (start) {
     engine.startAt(start);
+    if (start === "village_hub") state = applyEvent(state, { name: "chapter", arg: "8" });
     // Jumping into a later chapter: give it a random history of what the player did and heard before.
     for (const v of MEMORIES) engine.setVar(v, rand() < 0.5);
+    if (start === "village_hub") engine.setVar("next_giver", ["mara", "nell", "ash", "oda", "tobin"][Math.floor(rand() * 5)]);
   }
   let lastLines: string[] = [];
   const where = () => `${variant}/${start ?? "start"} seed ${seed}, step ${steps}: …${lastLines.slice(-2).join(" / ")}`;
@@ -166,6 +168,8 @@ function walk(variant: Variant, start: string | null, seed: number, taken: Taken
         engine.setVar("breaths", n);
         for (let i = 0; i < n; i++) state = applyEvent(state, { name: "calm", arg: "breath" });
       }
+      // Starting the next part hands over to a fresh game: the walk ends there.
+      if (s === "startpart") return { steps, endedAs: "lantern" };
       sceneOutcomes.add(`${s}: ${outcome || "done"}`);
       const choices = engine.choices;
       if (choices.length !== 1) problems.push({ where: where(), what: `scene "${s}" should be followed by exactly one placeholder choice, found ${choices.length}` });
@@ -217,7 +221,7 @@ function choicesInSource(): string[] {
 // plays them on purpose: "Let Ash take over" (all three errands), "Ask about the stone"
 // (asked at the festival, then after the storm), and telling Nell what was in Rosa's notes
 // (her door story, then how the festival started, then Rosa's box after the storm).
-const PLAYED_BY_STORY_TESTS = ["Let Ash take over", "Ask about the stone", "Tell her what was in Rosa's notes", "Sit with her", "\"She didn't want you to have to thank her.\"", "Ask Wren about her back"];
+const PLAYED_BY_STORY_TESTS = ["Let Ash take over", "Ask about the stone", "Tell her what was in Rosa's notes", "Sit with her", "\"She didn't want you to have to thank her.\"", "Ask Wren about her back", "Remind her what you said this afternoon", "Ask about her grandmother"];
 
 describe.skipIf(!process.env.EXPLORE)("exploring every choice", () => {
   const taken: Taken = new Map();
@@ -229,7 +233,7 @@ describe.skipIf(!process.env.EXPLORE)("exploring every choice", () => {
 
   const starts: [Variant, string | null][] = [
     ["main", null], ["promise", null], ["main", "start_day_two"], ["main", "start_storm"],
-    ["main", "start_mill"], ["main", "start_snow"], ["main", "start_coast"], ["main", "start_woods"], ["main", "start_woods"],
+    ["main", "start_mill"], ["main", "start_snow"], ["main", "start_coast"], ["main", "start_woods"], ["main", "start_woods"], ["main", "village_hub"],
   ];
   beforeAll(() => {
     let quiet = 0;
@@ -239,7 +243,7 @@ describe.skipIf(!process.env.EXPLORE)("exploring every choice", () => {
       const before = taken.size;
       const [variant, start] = starts[seed % starts.length];
       const r = walk(variant, start, seed, taken, offered, scenes, problems);
-      endings.add(`${variant}: ${r.endedAs}`);
+      if (r.endedAs !== "lantern") endings.add(`${variant}: ${r.endedAs}`);
       walks++;
       quiet = taken.size > before ? 0 : quiet + 1;
       if (new Set(problems.map((p) => p.what)).size > 40) break;

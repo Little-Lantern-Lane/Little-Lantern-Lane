@@ -658,7 +658,7 @@ export function buildMill(): RegionKit {
     [9900, "#b98a5e", [[-1, "#f6d36a", 1], [1, "#7fb0c9", 0]]],
     [10120, "#d9a77c", [[-1, "#c97b6a", 2]]],
   ];
-  g.add(woodsPost(X(MILL_PATH), -3.2));
+  g.add(woodsPost(X(MILL_PATH), -3.1));
   const blockers: Blocker[] = [];
   for (const [tx, col, chairs] of tables) {
     const t = cafeTable(col);

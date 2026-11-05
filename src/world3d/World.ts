@@ -12,22 +12,25 @@ import type { WorldState } from "../logic/world";
 import type { Sound } from "../audio/sound";
 import { pickBark } from "../game/barks";
 import {
-  AREAS, areaAt, DOORS, FISHING_SPOTS, FOUNTAIN_X, GROUND_Y, HOOKS, INTERACT_RANGE, laneBlocked, NPC_SPOTS, phaseOf,
-  NODES, PLAYER_SPOTS, PROPS, regionAt, REGIONS, SHED_ITEMS, USABLES, VIEW_H, WORLD_W, WOODS, woodsAreaAt, woodsLimit, ZONES, type Area, type GatherNode, type Region,
+  AREAS, areaAt, MAP_BOARDS, onTrail, PATH_REACH, TRAILS, WALK_SIGNS, BEACH_NODES, BEACH_SPOTS, DOORS, FISHING_SPOTS, FOUNTAIN_X, GROUND_Y, HOOKS, INTERACT_RANGE, laneBlocked, NPC_SPOTS, phaseOf,
+  NODES, PLAYER_SPOTS, POLES, PROPS, regionAt, REGIONS, SHED_ITEMS, USABLES, VIEW_H, WORLD_W, WOODS, woodsAreaAt, woodsLimit, ZONES, type Area, type GatherNode, type Region,
 } from "../game/layout";
 import { makeFigure } from "./figure";
 import { ball, cyl, glowing, lantern, LANTERN_COLOURS, own, soft } from "./kit";
 import { sight } from "./kit";
+import { buildBeach, type BeachKit } from "./regions/beach";
 import { buildCoast } from "./regions/coast";
 import { buildHouse, type HouseKit } from "./regions/house";
 import { buildWoods, type WoodsKit } from "./regions/woods";
+import { POLE_HEIGHT } from "./regions/village";
 import { buildRoom, type RoomKit } from "./regions/rooms";
 import { furnitureModel } from "./furniture";
 import { homeColours } from "./regions/home3d";
 import { FURNITURE, ROOMS, type Placed, type RoomId } from "../logic/furniture";
 import { fishFor, ITEMS, type BagState, type ItemId } from "../logic/bag";
 import { buildMill } from "./regions/mill";
-import { buildVillage, VILLAGE_Z } from "./regions/village";
+import { buildVillage, groundTrail, mapBoard, signPost, VILLAGE_Z } from "./regions/village";
+import { groundAt } from "./regions/village-ground";
 import { buildWorkshop } from "./regions/workshop";
 import { at, bandAt, gameX, groundH, regionZ, SCALE, worldX } from "./space";
 import type { Blocker, Figure, LightSpot, RegionKit } from "./types";
@@ -72,6 +75,8 @@ export interface SceneHooks {
   onGather(item: ItemId, fish: boolean): void;
   /** You walked up to the stall by the woods gate. */
   onStall(): void;
+  /** You walked up to a map board. */
+  onMap(): void;
 }
 
 /** Light and sky for one mood of the day. */
@@ -106,6 +111,7 @@ function skyFor(w: WorldState, x: number, z = 0): string {
   if (w.weather === "storm") return "storm";
   if (w.level === 5) return w.time === "morning" ? "winter-dawn" : w.time === "night" ? "winter-night" : "winter-sunset";
   if (area === "farbank" && (w.time === "morning" || w.time === "afternoon")) return "farbank";
+  if (region === "beach") return w.time === "sunset" || w.time === "night" ? "coast-dusk" : "coast";
   if (region === "coast") return w.time === "sunset" || w.time === "night" ? "coast-dusk" : "coast";
   if (region === "mill" && w.time === "morning") return "mill";
   return w.time in SKY ? w.time : "afternoon";
@@ -119,7 +125,7 @@ function darknessOf(w: WorldState, region: Region["id"]): number {
   // The power cut in chapter five; any other evening the house is lit and the stove's going.
   if (region === "home") a = w.level !== 5 ? (w.time === "night" ? 0.25 : 0) : w.time === "night" ? 0.72 : w.time === "sunset" ? 0.3 : a;
   if (region === "coast" && w.time === "sunset") a = 0.22;
-  if (region === "woods") a = Math.min(a, 0.5); // the moon gets through the trees
+  if (region === "woods" || region === "beach") a = Math.min(a, 0.5); // the moon gets through
   if (isExtraRoom(region)) a = w.level === 5 && w.time === "night" ? 0.6 : w.time === "night" ? 0.25 : 0;
   return a;
 }
@@ -156,6 +162,10 @@ function acrossOf(id: Npc, x: number): number {
   return near + k * Math.min(3.2, front - near - 0.8);
 }
 
+const ALL_NODES = [...NODES, ...BEACH_NODES];
+const ALL_SPOTS = [...FISHING_SPOTS, ...BEACH_SPOTS];
+const isOpenPlace = (id: Region["id"]) => id === "woods" || id === "beach";
+
 const doorZ = (d: (typeof DOORS)[number]) => d.z ?? bandAt(d.x)[0];
 
 /** How long fishing's moments last, in seconds. */
@@ -165,7 +175,7 @@ const REGROW = 80;
 const between = ([a, b]: readonly [number, number]) => a + Math.random() * (b - a);
 
 interface Fishing {
-  spot: (typeof FISHING_SPOTS)[number];
+  spot: (typeof ALL_SPOTS)[number];
   stage: "settle" | "nibble" | "lull" | "pull";
   until: number;
 }
@@ -184,6 +194,7 @@ export class World3D {
   private kits: Record<Region["id"], RegionKit>;
   private house: HouseKit;
   private woods: WoodsKit;
+  private beach: BeachKit;
   private rooms: Record<"bedroom" | "sitting" | "cellar", RoomKit>;
   private homeNow: HomeChoice;
   /** Furniture in the rooms, and the solid part of each. */
@@ -191,6 +202,8 @@ export class World3D {
   /** Picked things and when they'll be back. */
   private regrowing = new Map<GatherNode, number>();
   private fishing: Fishing | null = null;
+  private wayfinding: THREE.Group[] = [];
+  private pathArmed = true;
   /** How far the camera has been turned around you, in the woods. */
   private camYaw = 0;
   private camYawGoal = 0;
@@ -319,15 +332,17 @@ export class World3D {
     this.house = buildHouse(home);
     this.coast = buildCoast();
     this.woods = buildWoods();
+    this.beach = buildBeach();
     this.homeNow = home;
     this.rooms = { bedroom: buildRoom("bedroom", home), sitting: buildRoom("sitting", home), cellar: buildRoom("cellar", home) };
-    this.kits = { village: this.village, workshop: buildWorkshop(), home: this.house, mill: buildMill(), coast: this.coast, woods: this.woods, ...this.rooms };
+    this.kits = { village: this.village, workshop: buildWorkshop(), home: this.house, mill: buildMill(), coast: this.coast, woods: this.woods, beach: this.beach, ...this.rooms };
     for (const k of Object.values(this.kits)) {
       k.group.visible = false;
       this.scene.add(k.group);
     }
 
     this.buildFishing();
+    this.buildWayfinding();
     this.placeFurniture();
     this.buildLanterns();
     this.laneFog = this.makeLaneFog();
@@ -390,7 +405,7 @@ export class World3D {
 
     this.px = world.level === 1 ? 600 : PLAYER_SPOTS[world.location];
     this.applyState(world);
-    this.teleport(this.px);
+    this.teleport(this.px, world.location === "hub" ? 3.6 : undefined);
     this.lastLocation = world.location;
     this.lastLevel = world.level;
     const loop = () => {
@@ -406,6 +421,43 @@ export class World3D {
     el.hidden = true;
     this.root.appendChild(el);
     return el;
+  }
+
+  /** Map boards and walking signs, only in the village between stories. */
+  private buildWayfinding() {
+    const put = (x: number, mesh: THREE.Group) => {
+      mesh.position.z = regionZ(x);
+      this.kits[regionAt(x).id].group.add(mesh);
+      this.wayfinding.push(mesh);
+    };
+    for (const m of MAP_BOARDS) put(m.x, mapBoard(worldX(m.x), m.z));
+    for (const s of WALK_SIGNS) {
+      const sign = signPost(worldX(s.x), s.z, s.text);
+      sign.position.z = regionZ(s.x);
+      sign.position.y = regionAt(s.x).id === "village" ? groundAt(worldX(s.x), s.z) : 0;
+      this.kits[regionAt(s.x).id].group.add(sign);
+      if (!s.always) this.wayfinding.push(sign);
+    }
+    for (const t of Object.values(TRAILS)) {
+      const id = regionAt(t[0][0]).id;
+      // Sits over the Square's cobbles.
+      const height = id === "village" ? (x: number, z: number) => groundAt(x, z) + 0.07 : () => 0.02;
+      const sand = id === "beach";
+      this.kits[id].group.add(groundTrail(t, height, regionZ(t[0][0]), sand ? "#c4a26e" : "#b8915f", sand ? "#a3845a" : "#967349"));
+    }
+  }
+
+  /** Go straight to a place, from the map. */
+  travel(x: number, z: number) {
+    this.fade.classList.add("on");
+    setTimeout(() => {
+      this.teleport(x, z);
+      this.fade.classList.remove("on");
+    }, 200);
+  }
+
+  private atMapBoard() {
+    return this.world.level === 8 && MAP_BOARDS.some((m) => regionAt(m.x) === this.region && Math.hypot((m.x - this.px) / SCALE, m.z - this.pz) < 2.2);
   }
 
   private buildFishing() {
@@ -442,7 +494,14 @@ export class World3D {
       this.hookSpots.push({ pos: at(h.x, STRING_Z + 0.5, y - 0.9), color: "#ffb56a", power: i === BRIGHTEST ? 30 : 18, on: () => false });
     });
     // The string itself
-    const pts = HOOKS.map((h) => new THREE.Vector3(...at(h.x, STRING_Z, (GROUND_Y - h.y) / SCALE)));
+    // The string runs all the way to the top of each pole, where it's tied off.
+    const tied = POLES.map((x) => new THREE.Vector3(...at(x, VILLAGE_Z.poles, POLE_HEIGHT - 0.2)));
+    const pts = [tied[0], ...HOOKS.map((h) => new THREE.Vector3(...at(h.x, STRING_Z, (GROUND_Y - h.y) / SCALE))), tied[1]];
+    for (const t of tied) {
+      const knot = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), soft("#6e4e38"));
+      knot.position.copy(t);
+      this.kits.village.group.add(knot);
+    }
     this.kits.village.group.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 60, 0.022, 6), soft("#4a3a30")));
     // A heap by the fountain, and lanterns scattered where they fell
     for (let i = 0; i < 12; i++) {
@@ -505,10 +564,11 @@ export class World3D {
       this.lastLevel = w.level;
     }
     for (const k of Object.values(this.kits)) k.setState(w);
+    for (const m of this.wayfinding) m.visible = w.level === 8;
     this.setSky(skyFor(w, this.px, this.pz));
     const storm = w.weather === "storm";
     this.rain.visible = storm && this.region.id === "village";
-    this.snow.visible = w.weather === "snow" && (this.region.id === "village" || this.region.id === "woods");
+    this.snow.visible = w.weather === "snow" && (this.region.id === "village" || isOpenPlace(this.region.id));
 
     this.stack.visible = w.lanterns === "carried" && w.form === "person";
     this.scatter.visible = w.lanterns === "scattered";
@@ -569,7 +629,7 @@ export class World3D {
         }
       } else if (t.kind === "use") {
         const u = USABLES[t.id];
-        if (u) this.targets.push({ choice: c, x: u.x, z: Math.max(bandAt(u.x)[0] + 0.6, -1.2), label: c.text, auto: false });
+        if (u) this.targets.push({ choice: c, x: u.x, z: u.z ?? Math.max(bandAt(u.x)[0] + 0.6, -1.2), label: c.text, auto: false });
       } else {
         const z = ZONES[t.id];
         if (z) this.targets.push({ choice: c, x: (z.x0 + z.x1) / 2, z: 0, label: c.text, auto: z.auto });
@@ -1021,7 +1081,7 @@ export class World3D {
     const spots = [
       ...this.targets.filter((t) => !t.auto),
       ...DOORS.filter((d) => (!d.when || d.when(this.world)) && (!d.needs || hasRoom(this.homeNow, d.needs))).map((d) => ({ x: d.x, z: doorZ(d) + 0.5 })),
-      ...(this.region.id === "woods" ? [...NODES.filter((n) => !this.regrowing.has(n)), ...FISHING_SPOTS] : []),
+      ...(isOpenPlace(this.region.id) ? [...ALL_NODES.filter((n) => !this.regrowing.has(n)), ...ALL_SPOTS] : []),
     ];
     const near = spots.find((s) => Math.abs(s.x - p.x) < 80 && Math.abs(s.z - p.z) < 2.6);
     if (near) this.walkToAndInteract(near.x, near.z);
@@ -1142,7 +1202,7 @@ export class World3D {
       const dx = this.moveTo.x - this.px;
       const dz = this.moveTo.z - this.pz;
       const dist = Math.hypot(dx / SCALE, dz);
-      if (dist < 0.16 || this.time - this.moveTo.since > (this.region.id === "woods" ? 24 : 9)) {
+      if (dist < 0.16 || this.time - this.moveTo.since > (isOpenPlace(this.region.id) ? 24 : 9)) {
         this.moveTo = null;
         const arrived = this.pendingAction;
         this.pendingAction = null;
@@ -1162,6 +1222,7 @@ export class World3D {
     const interior = region.id !== "village";
     if (!interior && laneBlocked(this.world)) minX = 1080;
     const before = this.px;
+    const beforeZ = this.pz;
     this.px = THREE.MathUtils.clamp(this.px + vx * dt, minX, region.max);
     this.pz += vz * dt;
     if (region.id === "woods") {
@@ -1171,12 +1232,21 @@ export class World3D {
       this.px = woodsLimit(this.px, this.pz, this.world.props.includes("bridge"));
     }
     const [back, front] = this.hanging ? [STRING_Z - 0.8, STRING_Z + 2] : bandAt(this.px);
-    this.pz = THREE.MathUtils.clamp(this.pz, back, front);
+    if (this.pz < back || this.pz > front) {
+      // Past the usual edge you can only be on a path that's open right now.
+      if (!this.onOpenTrail(this.px, this.pz)) {
+        if (this.onOpenTrail(before, beforeZ)) {
+          this.px = before;
+          this.pz = beforeZ;
+        } else this.pz = THREE.MathUtils.clamp(this.pz, back, front);
+      }
+    }
     this.pushOutOfBlockers();
     if (laneBlocked(this.world) && before > 1080 && this.px <= 1080 && left) this.showPrompt(at(1100, this.pz), "Too dark to go on without a light");
     // Feeling bad, you walk slower.
     this.you.move(walking ? (WALK_SPEED / SCALE) * (this.feel > 0.5 ? 0.65 : 1) : 0, this.heading);
     this.checkAutoZones();
+    this.checkPaths();
   }
 
   private pushOutOfBlockers() {
@@ -1245,6 +1315,7 @@ export class World3D {
     if (t) return this.showPrompt(at(t.x, t.z), t.label, () => this.interact());
     const door = this.nearestDoor();
     if (door) return this.showPrompt(at(door.x, doorZ(door)), door.label, () => this.interact());
+    if (this.atMapBoard()) return this.showPrompt(at(this.px, this.pz), "Look at the map", () => this.interact());
     if (this.atStall()) return this.showPrompt(at(WOODS.stall, WOODS.stallZ), "Use the stall", () => this.interact());
     const node = this.nearestNode();
     if (node) {
@@ -1293,6 +1364,7 @@ export class World3D {
     if (t) return this.pick(t.choice);
     const door = this.nearestDoor();
     if (!door) {
+      if (this.atMapBoard()) return this.hooks.onMap();
       if (this.atStall()) return this.hooks.onStall();
       const node = this.nearestNode();
       if (node) return this.pickNode(node);
@@ -1302,29 +1374,51 @@ export class World3D {
     }
     // Walk up to it, then through.
     this.moveTo = { x: door.x, z: doorZ(door), since: this.time - 7.5 };
-    this.pendingAction = () => {
-      this.hooks.sound.play("door");
-      this.fade.classList.add("on");
-      setTimeout(() => {
-        this.teleport(door.to, door.toZ);
-        // Stepping out of your own door isn't walking up to it: the story waits until you do.
-        for (const id of Object.keys(ZONES)) if (this.inZone(id)) this.insideZones.add(id);
-        this.fade.classList.remove("on");
-      }, 200);
-    };
+    this.pendingAction = () => this.goThrough(door);
+  }
+
+  private goThrough(door: (typeof DOORS)[number]) {
+    this.pathArmed = false;
+    this.hooks.sound.play("door");
+    this.fade.classList.add("on");
+    setTimeout(() => {
+      this.teleport(door.to, door.toZ);
+      // Stepping out of your own door isn't walking up to it: the story waits until you do.
+      for (const id of Object.keys(ZONES)) if (this.inZone(id)) this.insideZones.add(id);
+      this.fade.classList.remove("on");
+    }, 200);
+  }
+
+  private onOpenTrail(x: number, z: number) {
+    return DOORS.some((d) => d.trail && regionAt(d.x) === this.region && (!d.when || d.when(this.world)) && onTrail(x, z, d.trail));
+  }
+
+  /** Walking onto the end of a path takes you along it. You have to step away before one can fire again. */
+  private checkPaths() {
+    if (this.hanging || this.tiding || this.approaching) return;
+    const here = DOORS.find((d) => d.path && regionAt(d.x) === this.region && (!d.when || d.when(this.world)) && Math.hypot((d.x - this.px) / SCALE, doorZ(d) - this.pz) < PATH_REACH);
+    if (!here) {
+      this.pathArmed = true;
+      return;
+    }
+    if (this.pathArmed && this.walking) this.goThrough(here);
   }
 
   // --- Gathering and fishing ---------------------------------------------------------
+
+  private gatherKit(n: GatherNode) {
+    return regionAt(n.x).id === "beach" ? this.beach : this.woods;
+  }
 
   private atStall() {
     return this.region.id === "woods" && this.world.level !== 7 && Math.hypot((WOODS.stall - this.px) / SCALE, WOODS.stallZ - this.pz) < 2.4;
   }
 
   private nearestNode(): GatherNode | null {
-    if (this.region.id !== "woods") return null;
+    if (!isOpenPlace(this.region.id)) return null;
     let best: GatherNode | null = null;
     let bestD = 1.9;
-    for (const n of NODES) {
+    for (const n of ALL_NODES) {
       if (this.regrowing.has(n)) continue;
       const d = Math.hypot((n.x - this.px) / SCALE, n.z - this.pz);
       if (d < bestD) [best, bestD] = [n, d];
@@ -1333,13 +1427,13 @@ export class World3D {
   }
 
   private nearestFishing() {
-    if (this.region.id !== "woods") return null;
-    return FISHING_SPOTS.find((s) => Math.hypot((s.x - this.px) / SCALE, s.z - this.pz) < 1.9) ?? null;
+    if (!isOpenPlace(this.region.id)) return null;
+    return ALL_SPOTS.find((s) => Math.hypot((s.x - this.px) / SCALE, s.z - this.pz) < 1.9) ?? null;
   }
 
   private pickNode(n: GatherNode) {
     if (n.tool && !this.hooks.bag().tools.includes(n.tool)) return;
-    this.woods.setNode(n.id, false);
+    this.gatherKit(n).setNode(n.id, false);
     this.regrowing.set(n, this.time + REGROW);
     this.hooks.sound.play("pickup");
     this.hooks.onGather(n.item, false);
@@ -1350,7 +1444,7 @@ export class World3D {
     for (const [n, when] of this.regrowing) {
       if (this.time < when) continue;
       this.regrowing.delete(n);
-      this.woods.setNode(n.id, true);
+      this.gatherKit(n).setNode(n.id, true);
     }
   }
 
@@ -1477,15 +1571,16 @@ export class World3D {
     this.region = region;
     this.kits[region.id].group.visible = true;
     this.rain.visible = this.world.weather === "storm" && region.id === "village";
-    this.snow.visible = this.world.weather === "snow" && (region.id === "village" || region.id === "woods");
+    this.snow.visible = this.world.weather === "snow" && (region.id === "village" || isOpenPlace(region.id));
     this.setSky(skyFor(this.world, this.px, this.pz));
     this.lightClock = 0;
     // The woods go on further than the eye: haze closes them in, and nothing past it is drawn.
-    const woods = region.id === "woods";
+    const woods = isOpenPlace(region.id);
     const fog = this.scene.fog as THREE.Fog;
-    fog.near = woods ? 26 : 44;
-    fog.far = woods ? 84 : 130;
-    this.camera.far = woods ? 100 : 400;
+    const beach = region.id === "beach"; // the sea goes on much further than the trees
+    fog.near = beach ? 60 : woods ? 26 : 44;
+    fog.far = beach ? 190 : woods ? 84 : 130;
+    this.camera.far = beach ? 240 : woods ? 100 : 400;
     this.camera.updateProjectionMatrix();
     this.camYaw = this.camYawGoal = 0;
   }
@@ -1607,12 +1702,12 @@ export class World3D {
 
   /** Turn the camera around you by a step (a button) in the woods. */
   turnCamera(by: number) {
-    if (this.region.id === "woods") this.camYawGoal += by;
+    if (isOpenPlace(this.region.id)) this.camYawGoal += by;
   }
 
   private clampLook() {
     const r = this.region;
-    if (r.id === "woods") return;
+    if (isOpenPlace(r.id)) return;
     const span = 8.5 * Math.max(1, (16 / 9) / this.camera.aspect) * 0.9;
     // Rooms stop at their walls, which sit just past where you can walk.
     const room = r.id === "workshop" || r.id === "home" || isExtraRoom(r.id);
@@ -1643,7 +1738,7 @@ export class World3D {
   }
 
   private updateCamera(dt: number) {
-    if (this.region.id === "woods") return this.updateWoodsCamera(dt);
+    if (isOpenPlace(this.region.id)) return this.updateWoodsCamera(dt);
     const [X, Y, Z] = at(this.px, this.pz * 0.55);
     const k = Math.min(1, dt * 4);
     this.lookAt.x += (X - this.lookAt.x) * k;

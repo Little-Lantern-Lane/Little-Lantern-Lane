@@ -13,7 +13,7 @@ export type TimeOfDay = "afternoon" | "sunset" | "night" | "morning";
 
 export interface WorldState {
   time: TimeOfDay;
-  location: "square" | "edge" | "cave" | "lane" | "home" | "mill" | "coast" | "shed" | "bridge";
+  location: "square" | "edge" | "cave" | "lane" | "home" | "mill" | "coast" | "shed" | "bridge" | "hub";
   form: "person" | "shell";
   posture: "upright" | "neutral" | "slumped";
   faceHot: boolean;
@@ -35,7 +35,7 @@ export interface WorldState {
   pull: boolean;
   /** Carrying Ash's candle jar: dark lanes can be walked. */
   hasLight: boolean;
-  /** Chapter: 1 the fall, 2 the morning after, 3 the storm, 4 opening day, 5 the first snow, 6 the tide. 7 is the week between three and four, the far bank. */
+  /** Chapter: 1 the fall, 2 the morning after, 3 the storm, 4 opening day, 5 the first snow, 6 the tide. 7 is the week between three and four, the far bank. 8 is the village where every game starts, outside any chapter. */
   level: Level;
   weather: "clear" | "storm" | "snow";
   /** Scenery that comes and goes with the story (names of PROPS in layout.ts). */
@@ -49,9 +49,9 @@ export interface WorldState {
   ended: boolean;
 }
 
-export type Level = 1 | 2 | 3 | 4 | 5 | 6 | 7;
-export const LEVELS: readonly Level[] = [1, 2, 3, 4, 5, 6, 7];
-const LOCATIONS: readonly WorldState["location"][] = ["square", "edge", "cave", "lane", "home", "mill", "coast", "shed", "bridge"];
+export type Level = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+export const LEVELS: readonly Level[] = [1, 2, 3, 4, 5, 6, 7, 8];
+const LOCATIONS: readonly WorldState["location"][] = ["square", "edge", "cave", "lane", "home", "mill", "coast", "shed", "bridge", "hub"];
 
 /** Where each later chapter starts, and what time and weather it is. */
 const CHAPTER_START: Record<Exclude<Level, 1>, Pick<WorldState, "location" | "time" | "weather">> = {
@@ -61,6 +61,7 @@ const CHAPTER_START: Record<Exclude<Level, 1>, Pick<WorldState, "location" | "ti
   5: { location: "lane", time: "sunset", weather: "snow" },
   6: { location: "coast", time: "afternoon", weather: "clear" },
   7: { location: "lane", time: "morning", weather: "clear" },
+  8: { location: "hub", time: "afternoon", weather: "clear" },
 };
 
 export function initialWorld(): WorldState {
@@ -225,8 +226,8 @@ export function applyWorldEvent(w: WorldState, ev: GameEvent): WorldState {
         hasLight: false,
         darkness: 0,
         panic: false,
-        // What you built on the river stays built.
-        props: w.props.filter((p) => LASTING_PROPS.includes(p)),
+        // What you built on the river stays built, except when you play the week you build it in.
+        props: level === 7 ? [] : w.props.filter((p) => LASTING_PROPS.includes(p)),
         placed: {},
         faces: {},
         ...CHAPTER_START[level],

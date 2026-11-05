@@ -15,8 +15,8 @@ export interface GameEvent {
 // save: a save point between chapters. sayit: put together what you'll say
 // when asked for more than you can give. tide: save what you can from the shed.
 // sell, gift, shop, craft: the panels for what you've gathered, in the week after the storm.
-export type SceneName = "fit" | "approach" | "mend" | "hang" | "chain" | "checkin" | "breathe" | "secure" | "save" | "sayit" | "tide" | "sell" | "gift" | "shop" | "craft";
-const SCENES: readonly SceneName[] = ["fit", "approach", "mend", "hang", "chain", "checkin", "breathe", "secure", "save", "sayit", "tide", "sell", "gift", "shop", "craft"];
+export type SceneName = "fit" | "approach" | "mend" | "hang" | "chain" | "checkin" | "breathe" | "secure" | "save" | "sayit" | "tide" | "sell" | "gift" | "shop" | "craft" | "look" | "homelook" | "startpart";
+const SCENES: readonly SceneName[] = ["fit", "approach", "mend", "hang", "chain", "checkin", "breathe", "secure", "save", "sayit", "tide", "sell", "gift", "shop", "craft", "look", "homelook", "startpart"];
 
 export interface ParsedTags {
   events: GameEvent[];
