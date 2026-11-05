@@ -466,3 +466,11 @@ body.in-hub #meter { display: none; }
 .panel-card.map-card > button { align-self: center; }
 .map-note { margin: 0; color: var(--muted); font-family: var(--serif); }
 .hud-bag.hud-map { bottom: 8.6cqw; }
+
+/* Lantern bench and nature table */
+.lantern-preview { width: 9em; align-self: center; }
+.lantern-preview svg { width: 100%; display: block; }
+.lantern-paints { display: flex; gap: 0.5em; justify-content: center; flex-wrap: wrap; }
+button.paint { width: 2.2em; height: 2.2em; border-radius: 50%; border: 2px solid transparent; padding: 0; }
+button.paint.on { border-color: var(--amber); box-shadow: 0 0 0 2px #0006; }
+.item-tile.empty { opacity: 0.5; border-style: dashed; }

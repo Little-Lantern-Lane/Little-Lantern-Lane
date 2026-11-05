@@ -106,6 +106,18 @@ export function groundTrail(pts: [number, number][], heightAt: (X: number, z: nu
   return g;
 }
 
+/** Fen's stall on the quay. */
+export function fishStall(x: number, z: number): THREE.Group {
+  const p = new Parts();
+  const stall = p.sub(x, 0, z);
+  for (const d of [-1.3, 1.3]) stall.add(pipe(0.06, 0.07, 2.5, soft("#7c5a42"), d, 1.25, -0.1));
+  stall.add(pbox(3, 0.14, 1.1, 0.05, soft("#8a9aa8"), 0, 1, 0), pbox(2.7, 0.9, 0.9, 0.05, soft("#6f8fa8"), 0, 0.48, 0));
+  for (let i = 0; i < 7; i++) stall.add(pbox(0.48, 0.1, 1.3, 0.04, soft(i % 2 ? "#fffaf0" : "#4f86c6"), -1.44 + i * 0.48, 2.5, 0.06));
+  for (const [dx, c] of [[-0.9, "#9dbb6a"], [-0.3, "#b9a0a0"], [0.3, "#c4cdd8"], [0.9, "#6f9fb8"]] as const) stall.add(dot(0.17, soft(c), dx, 1.16, 0.08));
+  textSign(stall, "FEN'S FISH", 0, 2.1, 0.06, 1.7, 0.36);
+  return bake(p.base);
+}
+
 /** A board with the map on it, standing in each place. */
 export function mapBoard(x: number, z: number): THREE.Group {
   const p = new Parts();
@@ -823,6 +835,17 @@ export function buildVillage(ctx: BuildContext): VillageKit {
   });
   potsPost.add(pipe(0.05, 0.07, 1.5, soft("#7c5a42"), 0, 0.75, -0.3));
   textSign(potsPost, "YOUR HOME", 0, 1.35, -0.26, 1.2, 0.3);
+  // Mara's swap shelf and Juno's nature table, in the Square.
+  const shelf = hubParts.sub(X(USABLES.swap_shelf.x), 0, USABLES.swap_shelf.z! - 0.9);
+  for (const d of [-0.9, 0.9]) shelf.add(pbox(0.5, 0.7, 0.5, 0.05, soft("#b9895e"), d, 0.35, 0));
+  shelf.add(pbox(2.4, 0.1, 0.62, 0.03, soft("#d9b285"), 0, 0.76, 0));
+  for (const [dx, c] of [[-0.7, "#6a4a84"], [-0.2, "#f4c9b8"], [0.3, "#e4edf2"], [0.8, "#f6f1e4"]] as const) shelf.add(dot(0.13, soft(c), dx, 0.92, 0));
+  textSign(shelf, "LEAVE ONE, TAKE ONE", 0, 0.42, 0.3, 1.1, 0.24);
+  const table = hubParts.sub(X(USABLES.nature_table.x), 0, USABLES.nature_table.z! - 0.9);
+  for (const dx of [-1, 1]) for (const dz of [-0.36, 0.36]) table.add(pipe(0.05, 0.06, 0.82, soft("#8a5f3e"), dx, 0.41, dz));
+  table.add(pbox(2.3, 0.1, 0.96, 0.04, soft("#c98a5e"), 0, 0.86, 0));
+  textSign(table, "NATURE TABLE", 0, 1.5, -0.44, 1.5, 0.3);
+  table.add(pipe(0.04, 0.05, 1.2, soft("#7c5a42"), 0, 1, -0.5));
   const hubScene = bake(hubParts.base);
   group.add(hubScene);
 

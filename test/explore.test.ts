@@ -154,6 +154,10 @@ function walk(variant: Variant, start: string | null, seed: number, taken: Taken
         engine.setVar("fought", fought);
         for (let i = 0; i < fought; i++) state = applyEvent(state, { name: "fight" });
       }
+      if (s === "nature") {
+        engine.setVar("nature_new", rand() < 0.7);
+        engine.setVar("nature_count", Math.floor(rand() * 20));
+      }
       if (s === "gift") {
         const chose = rand() < 0.8;
         const fit = ["best", "good", "kind"][Math.floor(rand() * 3)];

@@ -146,6 +146,13 @@ the Hill leads down to the mill, and the sands lead along to Saltmouth. Internal
 `village_hub` knot, and starting a part works exactly as the old title screen did, so the chapters are unchanged.
 Your bag and what you've built are kept between games. `?title` still shows the old chapter list.
 
+## Shops (2026-11-05)
+In the free village each shopkeeper is at their own place: the bakery and Nell's sewing room (walk in from the
+street), Ash behind the tea room counter at the mill, Tobin in the workshop with a furniture corner, and Fen at a fish
+stall on the Saltmouth quay. The chapters are unchanged, and Ash keeps the cart until the tea room opens in chapter four.
+Three things use no shopkeeper logic: design a lantern at Tobin's bench and it hangs on the string in the Square; bring
+one of each find to Juno's nature table; and swap one thing for another on Mara's shelf, with no coins.
+
 ## Lantern Sands (2026-11-05)
 A beach down from the far corner of the Square, open like the woods, with its own fish (mackerel, sea bass), things to
 gather (shells, seaweed, samphire, sea glass, driftwood) and two things to make. It follows the same rules as the woods

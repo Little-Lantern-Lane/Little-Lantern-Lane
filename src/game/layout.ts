@@ -16,7 +16,7 @@ export const HOME_DOOR = 740;
 export const INTERIOR = { x0: 4800, x1: 6080 };
 
 export interface Area {
-  id: "lane" | "street" | "square" | "hill" | "workshop" | "home" | "millpath" | "teashop" | "quay" | "shore" | "wood" | "river" | "farbank" | "bedroom" | "sitting" | "cellar" | "beach";
+  id: "lane" | "street" | "square" | "hill" | "workshop" | "home" | "millpath" | "teashop" | "quay" | "shore" | "wood" | "river" | "farbank" | "bedroom" | "sitting" | "cellar" | "beach" | "bakery" | "sewing";
   name: string;
   x0: number;
   x1: number;
@@ -46,6 +46,9 @@ export const AREAS: Area[] = [
   { id: "cellar", name: "The cellar", x0: 22800, x1: 23700 },
   // Down from the Square to the sea.
   { id: "beach", name: "Lantern Sands", x0: 24000, x1: 28400 },
+  // Shops you can walk into.
+  { id: "bakery", name: "The Bakery", x0: 28800, x1: 29700 },
+  { id: "sewing", name: "Nell's Sewing Room", x0: 29900, x1: 30800 },
 ];
 
 /** The woods: you walk east from the gate. The river runs across your way; the bridge is the only crossing. */
@@ -90,6 +93,8 @@ export const REGIONS = [
   { id: "sitting", x0: 21700, x1: 22600, min: 21740, max: 22560 },
   { id: "cellar", x0: 22800, x1: 23700, min: 22840, max: 23660 },
   { id: "beach", x0: 24000, x1: 28400, min: 24060, max: 28340 },
+  { id: "bakery", x0: 28800, x1: 29700, min: 28840, max: 29660 },
+  { id: "sewing", x0: 29900, x1: 30800, min: 29940, max: 30760 },
 ] as const;
 export type Region = (typeof REGIONS)[number];
 
@@ -134,6 +139,8 @@ export const LANTERN_ROW: { id: string; name: string; plate: string; knot?: stri
 /** Things a `#use:` choice can name. */
 export const USABLES: Record<string, { x: number; label: string; z?: number }> = {
   // The village where every game starts.
+  swap_shelf: { x: 2230, z: 3.2, label: "the swap shelf" },
+  nature_table: { x: 2900, z: 3.2, label: "the nature table" },
   mirror: { x: 640, z: -2.2, label: "the mirror" },
   paint_pots: { x: 860, z: -2.2, label: "the paint pots" },
   lantern_table: { x: 5530, label: "the lanterns" },
@@ -178,6 +185,11 @@ export function canLeaveHome(w: WorldState): boolean {
 /** The path down to the beach, at the far corner of the Square. The sands run along the sea. */
 export const BEACH = { x0: 24000, x1: 28400, arrive: 24640, gate: 24560, gateZ: 8, water: -14, back: 20 };
 
+/** Street doors of the shops. */
+/** The bakery door on Market Street: bakery() draws it 1.7 along from the shop's middle at world x 23.2. */
+const BAKERY_DOOR_X = 1370;
+export const SHOP_DOORS = { bakery: BAKERY_DOOR_X, sewing: 300 };
+
 /** Every place you can walk to when you're free, with the sign that points the way. */
 const free = (w: WorldState) => w.level === 8;
 
@@ -217,7 +229,7 @@ const endOf = (t: Trail) => ({ x: t[t.length - 1][0], z: t[t.length - 1][1] - (t
 
 /** Where the map stands in each place, and where it takes you. */
 export const MAP_BOARDS: { x: number; z: number }[] = [
-  { x: 2330, z: 5 }, { x: 860, z: 3.8 }, { x: 14420, z: -2 }, { x: 18000, z: 2.5 }, { x: 24820, z: 8 }, { x: 8380, z: -3 }, { x: 11300, z: -3 },
+  { x: 2450, z: 5.6 }, { x: 860, z: 3.8 }, { x: 14420, z: -2 }, { x: 18000, z: 2.5 }, { x: 24820, z: 8 }, { x: 8380, z: -3 }, { x: 11300, z: -3 },
 ];
 /** The signs that show the walking routes, in the village between stories. */
 export const WALK_SIGNS: { x: number; z: number; text: string; always?: boolean }[] = [
@@ -244,12 +256,12 @@ export const MAP_PLACES: Record<string, { name: string; x: number; z: number }> 
 /** Who starts the next part of the story, keyed by the chapter a save leads into. */
 export const NEXT_GIVER: Record<number, { who: string; line: string }> = {
   1: { who: "mara", line: "Mara's looking for you in the Square." },
-  2: { who: "nell", line: "Nell's looking for you on Lantern Lane." },
+  2: { who: "nell", line: "Nell's looking for you in her sewing room on Lantern Lane." },
   3: { who: "mara", line: "Mara's looking for you in the Square." },
   7: { who: "mara", line: "Mara's looking for you in the Square." },
-  4: { who: "ash", line: "Ash has something to ask you, on Market Street." },
+  4: { who: "ash", line: "Ash has something to ask you, at the tea room by the mill." },
   5: { who: "oda", line: "Oda's looking for you at the bakery." },
-  6: { who: "tobin", line: "Tobin's looking for you on Market Street." },
+  6: { who: "tobin", line: "Tobin's looking for you in the workshop." },
 };
 
 /** Paths to the woods from the two chapters that don't happen in the village. */
@@ -274,6 +286,11 @@ export const DOORS: { x: number; z?: number; to: number; toZ?: number; label: st
   { x: 5170, to: 1650, label: "Go out to Market Street" },
   { x: HOME_DOOR, to: 6510, toZ: -1.4, label: "Go into your house", when: canEnterHome },
   { x: 6470, to: HOME_DOOR, toZ: -3.1, label: "Go out to Lantern Lane", when: canLeaveHome },
+  // Shops you can walk into when you're free.
+  { x: SHOP_DOORS.bakery, to: 28940, toZ: -1, label: "Go into the bakery", when: free },
+  { x: 28900, to: SHOP_DOORS.bakery, toZ: -1.6, label: "Go back to Market Street" },
+  { x: SHOP_DOORS.sewing, to: 30040, toZ: -1, label: "Go into Nell's sewing room", when: free },
+  { x: 30000, to: SHOP_DOORS.sewing, toZ: -1.6, label: "Go back to Lantern Lane" },
   // Rooms your home has grown. The stairs, a door in the end wall, and a hatch in the floor.
   { x: 7040, z: -1.6, to: 20720, toZ: -1, label: "Go upstairs", needs: "bedroom" },
   { x: 20680, to: 7040, toZ: -1.4, label: "Go downstairs" },
@@ -423,7 +440,7 @@ export const NPC_SPOTS: Record<Phase, Spots> = {
   coast_dusk: { fen: 11860, tobin: 11960, hesketh: 12240 },
   // The week after the storm: Mara and Nell at the river, the kids in the wood, everyone else at work.
   // The village between stories: everyone at their own place, ready to trade.
-  hub: { nell: 330, wren: 1240, oda: 1300, tobin: 1760, ash: 1880, mara: 2380, pip: 2980, juno: 3030 },
+  hub: { fen: 11500, nell: 30320, wren: 29220, oda: 29340, tobin: 5720, ash: 9640, mara: 2300, pip: 2850, juno: 2960 },
   woods: { mara: 16700, nell: 16880, pip: 15000, juno: 15060, ash: 1880, wren: 1240, oda: 1300, tobin: 1760 },
 };
 

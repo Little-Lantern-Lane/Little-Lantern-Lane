@@ -8,7 +8,7 @@ import { BEACH, groundY, GROUND_Y, HOME_DOOR, regionAt, WOODS, type Region } fro
 export const SCALE = 55;
 
 /** Each separate place sits far from the others, so only one is ever in view. */
-const REGION_Z: Record<Region["id"], number> = { village: 0, workshop: -400, home: -800, mill: -1200, coast: -1600, woods: -2000, bedroom: -2400, sitting: -2800, cellar: -3200, beach: -3600 };
+const REGION_Z: Record<Region["id"], number> = { village: 0, workshop: -400, home: -800, mill: -1200, coast: -1600, woods: -2000, bedroom: -2400, sitting: -2800, cellar: -3200, beach: -3600, bakery: -4000, sewing: -4400 };
 
 export const worldX = (x: number) => x / SCALE;
 export const gameX = (X: number) => X * SCALE;
@@ -27,7 +27,7 @@ const doorPath = (off: number) => 0.9 * Math.min(1, Math.max(0, (130 - off) / 90
 /** How far you can walk across the path at x, as [back, front] offsets. Wider in open places. */
 export function bandAt(x: number): [number, number] {
   const id = regionAt(x).id;
-  if (id === "workshop" || id === "home" || id === "bedroom" || id === "sitting" || id === "cellar") return [-2.6, 2.4];
+  if (id === "workshop" || id === "home" || id === "bedroom" || id === "sitting" || id === "cellar" || id === "bakery" || id === "sewing") return [-2.6, 2.4];
   if (id === "woods") return [-WOODS.band, WOODS.band];
   if (id === "beach") return [BEACH.water, BEACH.back];
   if (id === "mill") return x >= 9000 ? [-2.6, 2.4] : [-3.5, 3.5];

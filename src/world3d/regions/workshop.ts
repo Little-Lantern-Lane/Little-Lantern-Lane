@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { USABLES } from "../../game/layout";
 import type { WorldState } from "../../logic/world";
 import { boardCanvas, cyl, glowing, isEvening, lantern, LANTERN_COLOURS, noShadow, own, paint, paintPlanks, rbox, room, seeded, soft, surround, wallDoor } from "../kit";
+import { furnitureModel } from "../furniture";
 import { regionZ, worldX as X } from "../space";
 import type { Blocker, LightSpot, RegionKit } from "../types";
 
@@ -123,11 +124,37 @@ export function buildWorkshop(): RegionKit {
     { X: cx - 0.8, Z: Z + BACK + 0.5, r: 0.5 },
   ];
 
+  // Furniture on show at the end of the room, for when Tobin's taking orders between stories.
+  const corner = new THREE.Group();
+  const samples = { wall: "#f7d9c4", roof: "#7a9fd0", trim: "#5f8fb0", door: "#5f8fb0" };
+  for (const [id, x, z, turn] of [["stool", 5660, 2, 0], ["side_table", 5740, 2.1, 0], ["chair", 5810, 1.7, -0.6]] as const) {
+    const piece = furnitureModel(id, samples);
+    piece.position.set(X(x), 0, z);
+    piece.rotation.y = turn;
+    corner.add(piece);
+  }
+  const plate = paint(280, 80, (c) => {
+    c.fillStyle = "#a8674a";
+    c.fillRect(0, 0, 280, 80);
+    c.fillStyle = "#fff6e6";
+    c.font = 'bold 40px "Trebuchet MS", sans-serif';
+    c.textAlign = "center";
+    c.fillText("FURNITURE", 140, 56);
+  });
+  const signX = X(5740);
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(2.1, 0.6), new THREE.MeshStandardMaterial({ map: plate, roughness: 0.8 }));
+  sign.position.set(signX, 4.3, 1.8);
+  corner.add(rbox(2.3, 0.76, 0.08, 0.05, soft(WOOD), signX, 4.3, 1.74), sign);
+  for (const d of [-0.9, 0.9]) corner.add(cyl(0.012, 0.012, 4.5, soft("#8a6a52"), signX + d, 6.9, 1.74, 5));
+  corner.visible = false;
+  g.add(corner);
+
   return {
     group,
     lights,
     blockers,
     setState(ws: WorldState) {
+      corner.visible = ws.level === 8;
       heap.visible = ws.lanterns === "workshop";
       const dark = isEvening(ws);
       glass.color.set(dark ? "#2f3866" : "#cfe9f4");

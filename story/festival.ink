@@ -47,6 +47,8 @@ VAR breaths = 0           // set by the breathing scene: slow breaths taken
 VAR lost = false
 VAR next_chapter = 0      // which chapter a save point leads into
 // The week after the storm
+VAR nature_count = 0      // set by the TS layer: how much is on Juno's table
+VAR nature_new = false    // set by the TS layer: you've just brought something
 VAR next_giver = "mara"   // set by the TS layer: who starts the next part of the story
 VAR woods_stage = 0       // 0 mending the bridge, 1 the far bank is open, 2 the lantern is hung
 VAR has_rod = false
@@ -1703,10 +1705,48 @@ pip/laugh: BYE!
     -> hub_mara -> h
 + [Talk to Pip and Juno #talk: pip]
     -> hub_kids -> h
++ [Talk to Fen #talk: fen]
+    -> hub_fen -> h
++ [Look at the swap shelf #use: swap_shelf]
+    -> hub_swap -> h
++ [Look at Juno's nature table #use: nature_table]
+    -> hub_nature -> h
 
 === start_next ===
 You set off. #scene: startpart
 + [·] ->->
+
+=== hub_swap ===
+It's only a plank on two crates. Mara's chalked on it: LEAVE ONE, TAKE ONE. #scene: swap
++ [·] ->->
+
+=== hub_nature ===
+A table with everything laid out in rows, and a label in Juno's careful writing under each. #scene: nature
++ [·]
+    { nature_new:
+        { nature_count < 5:
+            juno/smile: That's {nature_count}. I've written down where you found it.
+        - else:
+            { nature_count < 15:
+                juno/happy: {nature_count}! I've had to start a second row.
+            - else:
+                juno/warm: {nature_count}. Nobody's ever found this many. I checked.
+            }
+        }
+    }
+    ->->
+
+=== hub_fen ===
+fen/laughing: Fresh fish! Well. Fish! Don't look at me like that, it was fresher when you came in.
+- (menu)
++ [Sell Fen some fish]
+    fen: I'll give you a bit over, mind. Someone has to keep the sea in business.
+    -> sell_to("fen") -> menu
++ ["What's smoking?"]
+    fen/laughing: Me, if the shed goes up again. Kippers, mostly.
+    -> shop_with("fen") -> menu
++ [Leave him to it]
+    ->->
 
 === hub_look ===
 You have a look at yourself. #scene: look
@@ -1749,6 +1789,9 @@ You think about the house. #scene: homelook
 + ["Could you make something for my house?"]
     tobin/smile: I've been hoping someone would ask that.
     -> shop_with("tobin") -> menu
++ ["Can I make a lantern of my own?"]
+    tobin/smile: I'd like to see you try. Pick your colour. If it's any good it goes on the string in the Square.
+    -> make_lantern -> menu
 + ["Have you got any furniture?"]
     ~ trade_with = "furniture"
     tobin: Have a look. If you'd rather make it yourself, I won't be offended. Press F at home.
@@ -1758,15 +1801,22 @@ You think about the house. #scene: homelook
 + [Let him get on]
     ->->
 
+=== make_lantern ===
+Tobin clears a corner of the bench. #scene: lanterns
++ [·] ->->
+
 === hub_ash ===
 { next_giver == "ash":
     ash/worried: It's today. I open at noon. Can you come early?
 - else:
-    ash/smile: Anything you've dried, steeped or found under a tree, I'll take it.
+    ash/smile: Sit anywhere. Anything you've dried, steeped or found under a tree, I'll take it.
 }
 - (menu)
 + {next_giver == "ash"} ["I'm ready."]
     -> start_next -> menu
++ ["What are you pouring today?"]
+    ash/smile: Mint if you want to feel awake. The mill blend if you want to feel like you've been somewhere.
+    -> shop_with("ash") -> menu
 + [Sell Ash some mushrooms]
     -> sell_to("ash") -> menu
 + {can_gift("ash")} [Give Ash something]
@@ -1783,6 +1833,9 @@ You think about the house. #scene: homelook
 - (menu)
 + {next_giver == "oda"} ["I'm ready."]
     -> start_next -> menu
++ ["What's fresh?"]
+    oda/smile: All of it. That's rather the point of us.
+    -> shop_with("wren") -> menu
 + [Sell the bakers some fruit]
     -> sell_to("wren") -> menu
 + {can_gift("wren")} [Give Wren something]

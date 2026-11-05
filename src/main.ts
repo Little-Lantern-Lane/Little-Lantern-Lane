@@ -19,10 +19,10 @@ import { factCard, runBreathScene, runChainScene, runCheckInScene, runFitScene, 
 import { CHAPTER_NAMES, clearSave, readBag, readLooks, readSave, writeBag, writeLooks, writeSave, type Looks, type SaveChapter, type SaveGame } from "./save";
 import { buildAddition, DEFAULT_CHARACTER, DEFAULT_HOME, growRoom, hasAddition, remainingAdditions, type Decor } from "./logic/appearance";
 import { addPiece, canPlace, FURNITURE, place, putAway, turnPiece, type Furnishings, type FurnitureId } from "./logic/furniture";
-import { canAfford, canGift, countOf, craft, gather, give, ITEMS, makeTool, pay, sell, spendItems, type BagState, type Buyer, type Friend, type ItemId } from "./logic/bag";
+import { makeLantern, swapShelf, toTable, buyItem, canAfford, canGift, countOf, craft, gather, give, ITEMS, makeTool, pay, sell, spendItems, type BagState, type Buyer, type Friend, type ItemId } from "./logic/bag";
 import { COIN, itemIcon } from "./ui/items";
 import { runMapScene, type MapPick } from "./ui/map";
-import { runBagScreen, runCraftScene, runFurnishScene, runGiftScene, runSellScene, runShopScene, runStallScene, type ShopRow } from "./ui/trade";
+import { runBagScreen, runCraftScene, runFurnishScene, runGiftScene, runLanternScene, runNatureScene, runSellScene, runShopScene, runStallScene, runSwapScene, type ShopRow } from "./ui/trade";
 import { applyCharacter, playerSVG, runCharacterScreen, runGrowScene, runHomeScreen } from "./ui/wardrobe";
 import { PlaytestLog } from "./playtest";
 
@@ -292,12 +292,17 @@ async function openFurnish() {
   if (bagFree) world.setLocked(false);
 }
 
+/** Counter items take their own payment, so undo the general one first. */
+const payBack = (price: number): BagState => ({ ...state.bag, coins: state.bag.coins + price });
+
 function buy(row: ShopRow) {
   if (state.bag.coins < row.price) return;
   setBag(pay(state.bag, row.price));
   sound.play("pickup");
   const clothes = ["leafcrown", "fishinghat", "mushroomcap", "leafcape"].includes(row.id);
-  if (row.id.startsWith("piece_")) {
+  if (row.id.startsWith("item_")) {
+    setBag(buyItem(payBack(row.price), row.id.slice(5) as ItemId));
+  } else if (row.id.startsWith("piece_")) {
     setFurniture(addPiece(looks.home.furniture, row.id.slice(6) as FurnitureId));
   } else if (row.id === "room_up" || row.id === "room_side") {
     useLooks({ ...looks, home: buildAddition(looks.home, row.id === "room_up" ? "up" : "side") });
@@ -507,14 +512,34 @@ async function play(chosen: Variant, from?: string, resume?: SaveGame) {
         const save = readSave();
         void (save ? begin(save.variant, undefined, save) : begin("main"));
         return;
+      } else if (scene === "lanterns") {
+        await runLanternScene(panel, () => state.bag, (l) => {
+          setBag(makeLantern(state.bag, l));
+          sound.play("light");
+          world?.applyState(state.world);
+        });
+      } else if (scene === "nature") {
+        const brought = await runNatureScene(panel, () => state.bag, (id) => {
+          setBag(toTable(state.bag, id));
+          sound.play("fact");
+          world?.refreshNature();
+        });
+        engine.setVar("nature_new", brought);
+        engine.setVar("nature_count", state.bag.nature.length);
+      } else if (scene === "swap") {
+        await runSwapScene(panel, () => state.bag, (leave, take) => {
+          setBag(swapShelf(state.bag, leave, take));
+          sound.play("pickup");
+        });
       } else if (scene === "look") {
         await chooseCharacter();
       } else if (scene === "homelook") {
         await chooseHome();
         await world?.refreshHome(looks.home);
       } else if (scene === "sell") {
-        await runSellScene(panel, engine.getVar("trade_with") as Buyer, () => state.bag, (id) => {
-          setBag(sell(state.bag, id));
+        const buyer = engine.getVar("trade_with") as Buyer;
+        await runSellScene(panel, buyer, () => state.bag, (id) => {
+          setBag(sell(state.bag, id, buyer));
           sound.play("pickup");
         });
       } else if (scene === "shop") {

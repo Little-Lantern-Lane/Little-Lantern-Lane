@@ -24,12 +24,13 @@ import { buildHouse, type HouseKit } from "./regions/house";
 import { buildWoods, type WoodsKit } from "./regions/woods";
 import { POLE_HEIGHT } from "./regions/village";
 import { buildRoom, type RoomKit } from "./regions/rooms";
+import { buildShop } from "./regions/shops";
 import { furnitureModel } from "./furniture";
 import { homeColours } from "./regions/home3d";
 import { FURNITURE, ROOMS, type Placed, type RoomId } from "../logic/furniture";
 import { fishFor, ITEMS, type BagState, type ItemId } from "../logic/bag";
 import { buildMill } from "./regions/mill";
-import { buildVillage, groundTrail, mapBoard, signPost, VILLAGE_Z } from "./regions/village";
+import { buildVillage, fishStall, groundTrail, mapBoard, signPost, VILLAGE_Z } from "./regions/village";
 import { groundAt } from "./regions/village-ground";
 import { buildWorkshop } from "./regions/workshop";
 import { at, bandAt, gameX, groundH, regionZ, SCALE, worldX } from "./space";
@@ -101,7 +102,7 @@ const SKY: Record<string, Sky> = {
   indoor: { top: "#1e1712", mid: "#1e1712", low: "#1e1712", hemi: "#fff0dc", ground: "#a48c70", hemiI: 2.1, sun: "#ffe6c4", sunI: 1.3, fog: "#1e1712" },
 };
 
-const isExtraRoom = (id: Region["id"]) => id === "bedroom" || id === "sitting" || id === "cellar";
+const isExtraRoom = (id: Region["id"]) => id === "bedroom" || id === "sitting" || id === "cellar" || id === "bakery" || id === "sewing";
 
 /** The sky to show: by chapter, place, weather and time of day. */
 function skyFor(w: WorldState, x: number, z = 0): string {
@@ -162,6 +163,7 @@ function acrossOf(id: Npc, x: number): number {
   return near + k * Math.min(3.2, front - near - 0.8);
 }
 
+const NATURE_COLOURS: Record<string, string> = { fruit: "#e0574c", mushroom: "#f2b54a", mineral: "#7fc4e8", fish: "#9dbb6a", material: "#b9a388", sea: "#4f8f6a" };
 const ALL_NODES = [...NODES, ...BEACH_NODES];
 const ALL_SPOTS = [...FISHING_SPOTS, ...BEACH_SPOTS];
 const isOpenPlace = (id: Region["id"]) => id === "woods" || id === "beach";
@@ -203,6 +205,7 @@ export class World3D {
   private regrowing = new Map<GatherNode, number>();
   private fishing: Fishing | null = null;
   private wayfinding: THREE.Group[] = [];
+  private natureShow = new THREE.Group();
   private pathArmed = true;
   /** How far the camera has been turned around you, in the woods. */
   private camYaw = 0;
@@ -335,7 +338,7 @@ export class World3D {
     this.beach = buildBeach();
     this.homeNow = home;
     this.rooms = { bedroom: buildRoom("bedroom", home), sitting: buildRoom("sitting", home), cellar: buildRoom("cellar", home) };
-    this.kits = { village: this.village, workshop: buildWorkshop(), home: this.house, mill: buildMill(), coast: this.coast, woods: this.woods, beach: this.beach, ...this.rooms };
+    this.kits = { village: this.village, workshop: buildWorkshop(), home: this.house, mill: buildMill(), coast: this.coast, woods: this.woods, beach: this.beach, bakery: buildShop("bakery"), sewing: buildShop("sewing"), ...this.rooms };
     for (const k of Object.values(this.kits)) {
       k.group.visible = false;
       this.scene.add(k.group);
@@ -431,6 +434,9 @@ export class World3D {
       this.wayfinding.push(mesh);
     };
     for (const m of MAP_BOARDS) put(m.x, mapBoard(worldX(m.x), m.z));
+    put(11560, fishStall(worldX(11560), -3.4));
+    this.kits.village.group.add(this.natureShow);
+    this.refreshNature();
     for (const s of WALK_SIGNS) {
       const sign = signPost(worldX(s.x), s.z, s.text);
       sign.position.z = regionZ(s.x);
@@ -440,11 +446,38 @@ export class World3D {
     }
     for (const t of Object.values(TRAILS)) {
       const id = regionAt(t[0][0]).id;
+      if (id === "coast") continue; // the quay is the road
       // Sits over the Square's cobbles.
       const height = id === "village" ? (x: number, z: number) => groundAt(x, z) + 0.07 : () => 0.02;
       const sand = id === "beach";
       this.kits[id].group.add(groundTrail(t, height, regionZ(t[0][0]), sand ? "#c4a26e" : "#b8915f", sand ? "#a3845a" : "#967349"));
     }
+  }
+
+  /** What's on Juno's table: a little coloured thing for each find, in rows. */
+  refreshNature() {
+    this.natureShow.clear();
+    const [tx, , tz] = at(USABLES.nature_table.x, USABLES.nature_table.z! - 0.9);
+    this.hooks.bag().nature.forEach((id, i) => {
+      const dot = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), soft(NATURE_COLOURS[ITEMS[id].kind] ?? "#c4cdd8"));
+      dot.scale.y = 0.7;
+      dot.position.set(tx - 0.95 + (i % 9) * 0.24, 0.98, tz - 0.26 + Math.floor(i / 9) * 0.26);
+      this.natureShow.add(dot);
+    });
+  }
+
+  /** Lanterns you've designed take over the hooks along the string, in the village. */
+  private paintMyLanterns(w: WorldState) {
+    const mine = w.level === 8 ? this.hooks.bag().lanterns : [];
+    this.hookLanterns.forEach((l, i) => {
+      const my = mine[i];
+      if (my) l.mat.color.set(my.colour);
+      else l.mat.color.set(i === BRIGHTEST ? "#d9473f" : LANTERN_COLOURS[i % 6]);
+      const base = i === BRIGHTEST ? 1.25 : 1;
+      if (my?.shape === "tall") l.g.scale.set(base * 0.82, base * 1.35, base * 0.82);
+      else if (my?.shape === "wide") l.g.scale.set(base * 1.3, base * 0.8, base * 1.3);
+      else l.g.scale.setScalar(base);
+    });
   }
 
   /** Go straight to a place, from the map. */
@@ -565,6 +598,7 @@ export class World3D {
     }
     for (const k of Object.values(this.kits)) k.setState(w);
     for (const m of this.wayfinding) m.visible = w.level === 8;
+    this.natureShow.visible = w.level === 8;
     this.setSky(skyFor(w, this.px, this.pz));
     const storm = w.weather === "storm";
     this.rain.visible = storm && this.region.id === "village";
@@ -575,6 +609,7 @@ export class World3D {
     this.heap.visible = w.lanterns === "heaped";
 
     const night = w.time === "night";
+    this.paintMyLanterns(w);
     this.hookLanterns.forEach((l, i) => {
       if (!this.hanging) l.g.visible = l.shown = w.lanterns === "hung" && i >= w.lanternsLost;
       const lit = night && i < w.lanternsHung && w.lanterns === "hung" && i >= w.lanternsLost;

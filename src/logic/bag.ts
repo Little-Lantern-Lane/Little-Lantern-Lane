@@ -38,6 +38,12 @@ export const ITEMS = {
   charm: { name: "Stone charm", kind: "made", price: 28, note: "Quartz on a strip of birch." },
   tart: { name: "Plum tart", kind: "made", price: 40, note: "Plums and apples." },
   moon_tea: { name: "Moon tea", kind: "made", price: 52, note: "Tastes like the far bank." },
+  kipper: { name: "Smoked kipper", kind: "made", price: 15, note: "Fen says it's the best in the county. There may be only one." },
+  apple_loaf: { name: "Apple loaf", kind: "made", price: 16, note: "Still warm from Wren's oven." },
+  honey_bun: { name: "Honey bun", kind: "made", price: 12, note: "Sticky all the way through." },
+  seed_cake: { name: "Seed cake", kind: "made", price: 20, note: "Oda's aunt Bet's recipe." },
+  mint_tea: { name: "Mint tea", kind: "made", price: 14, note: "From Ash's own blend." },
+  mill_blend: { name: "Mill blend", kind: "made", price: 24, note: "Smoky, with a little orange." },
   shell_chime: { name: "Shell chime", kind: "made", price: 34, note: "Clinks in any kind of wind." },
   sea_broth: { name: "Sea broth", kind: "made", price: 44, note: "Tastes of the whole beach." },
   pendant: { name: "Skyglass pendant", kind: "made", price: 70, note: "Copper wire around blue stone." },
@@ -68,16 +74,20 @@ export const TOOLS: Record<Tool, { name: string; use: string; needs: Partial<Rec
 export const BRIDGE_NEEDS: Partial<Record<ItemId, number>> = { driftwood: 6, ironstone: 2 };
 export const LANTERN_NEEDS: Partial<Record<ItemId, number>> = { birch_bark: 2, glowcap: 1, skyglass: 1 };
 
-export type Buyer = "ash" | "wren" | "tobin" | "nell";
+export type Buyer = "ash" | "wren" | "tobin" | "nell" | "fen";
 /** Who wants what, and why they're buying it, in the villager's own trade. */
 export const BUYERS: Record<Buyer, ItemKind[]> = {
   ash: ["mushroom", "sea", "made"],
   wren: ["fruit", "made"],
   tobin: ["mineral", "made"],
   nell: ["fish", "made"],
+  fen: ["fish"],
 };
 
-export type Friend = Buyer | "mara" | "oda" | "pip" | "juno";
+/** What someone pays. Fen knows fish, and pays a little over the odds for it. */
+export const priceFrom = (who: Buyer | "stall", id: ItemId) => (who === "fen" ? Math.ceil(ITEMS[id].price * 1.25) : ITEMS[id].price);
+
+export type Friend = Exclude<Buyer, "fen"> | "mara" | "oda" | "pip" | "juno";
 export const FRIENDS: readonly Friend[] = ["ash", "wren", "oda", "tobin", "nell", "mara", "pip", "juno"];
 /** What each villager would really like. Conversations give it away if you listen. */
 export const FAVOURITES: Record<Friend, { best: ItemId[]; good: ItemKind[] }> = {
@@ -116,6 +126,14 @@ export const DECOR_SHOP: { id: Decor; name: string; note: string; price: number 
   { id: "cellar", name: "A cellar", note: "A room under the floor, cool and quiet", price: 90 },
 ];
 
+/** What the bakers and Ash sell over the counter, good for giving. It costs more than they'd pay you for it. */
+export const COUNTER: Record<"wren" | "ash" | "fen", ItemId[]> = {
+  fen: ["kipper"],
+  wren: ["honey_bun", "apple_loaf", "seed_cake"],
+  ash: ["mint_tea", "mill_blend"],
+};
+export const counterPrice = (id: ItemId) => Math.ceil(ITEMS[id].price * 1.5);
+
 export interface BagState {
   items: Partial<Record<ItemId, number>>;
   coins: number;
@@ -128,12 +146,34 @@ export interface BagState {
   gaveAt: Partial<Record<Friend, number>>;
   /** What you've built in the world, kept from game to game like the bag itself. */
   built: string[];
+  /** Lanterns you've designed, hung on the string in the Square. */
+  lanterns: MyLantern[];
+  /** What you've brought to Juno's nature table. */
+  nature: ItemId[];
+  /** What's on Mara's swap shelf. */
+  shelf: ItemId[];
+}
+
+export const LANTERN_PAINTS = ["#e9583c", "#f2b54a", "#8fcc76", "#5fb0c6", "#7f86c8", "#c94f6d", "#f4e6c8", "#3f6f8a"];
+export const LANTERN_SHAPES = ["round", "tall", "wide"] as const;
+export interface MyLantern {
+  colour: string;
+  shape: (typeof LANTERN_SHAPES)[number];
+}
+export const LANTERN_PRICE = 25;
+/** The string has twelve hooks. */
+export const MAX_LANTERNS = 12;
+
+/** Things that can go on Juno's table: anything found, nothing bought or made. */
+export const NATURE_ITEMS = ITEM_IDS_FOUND();
+function ITEM_IDS_FOUND(): ItemId[] {
+  return (Object.keys(ITEMS) as ItemId[]).filter((id) => ITEMS[id].kind !== "made");
 }
 
 /** Gather this many more things before giving the same person another gift, so gifts stay gifts. */
 export const GIFT_GAP = 5;
 
-export const initialBag = (): BagState => ({ items: {}, coins: 0, found: [], tools: [], gathered: 0, gaveAt: {}, built: [] });
+export const initialBag = (): BagState => ({ items: {}, coins: 0, found: [], tools: [], gathered: 0, gaveAt: {}, built: [], lanterns: [], nature: [], shelf: ["blackberry", "shell", "quartz", "birch_bark"] });
 
 export const countOf = (b: BagState, id: ItemId) => b.items[id] ?? 0;
 
@@ -159,6 +199,12 @@ export function craft(b: BagState, makes: ItemId): BagState {
   return add(next, makes, 1);
 }
 
+/** Buy something over a counter. */
+export function buyItem(b: BagState, id: ItemId): BagState {
+  const price = counterPrice(id);
+  return b.coins < price ? b : { ...add(b, id, 1), coins: b.coins - price };
+}
+
 export function makeTool(b: BagState, tool: Tool): BagState {
   if (b.tools.includes(tool) || !canAfford(b, TOOLS[tool].needs)) return b;
   return { ...spendItems(b, TOOLS[tool].needs), tools: [...b.tools, tool] };
@@ -170,9 +216,29 @@ export function spendItems(b: BagState, needs: Partial<Record<ItemId, number>>):
   return next;
 }
 
-export function sell(b: BagState, id: ItemId): BagState {
+export function sell(b: BagState, id: ItemId, who: Buyer | "stall" = "stall"): BagState {
   if (countOf(b, id) < 1) return b;
-  return { ...take(b, id, 1), coins: b.coins + ITEMS[id].price };
+  return { ...take(b, id, 1), coins: b.coins + priceFrom(who, id) };
+}
+
+/** Pay for a lantern of your own design. */
+export function makeLantern(b: BagState, l: MyLantern): BagState {
+  if (b.coins < LANTERN_PRICE || b.lanterns.length >= MAX_LANTERNS) return b;
+  return { ...b, coins: b.coins - LANTERN_PRICE, lanterns: [...b.lanterns, l] };
+}
+
+/** Bring one of something to Juno's table. It stays there; one of each is all she needs. */
+export function toTable(b: BagState, id: ItemId): BagState {
+  if (countOf(b, id) < 1 || b.nature.includes(id) || !NATURE_ITEMS.includes(id)) return b;
+  return { ...take(b, id, 1), nature: [...b.nature, id] };
+}
+
+/** Leave something on Mara's shelf and take what was there. No coins, and nothing's worth more than anything else. */
+export function swapShelf(b: BagState, leave: ItemId, takeId: ItemId): BagState {
+  const at = b.shelf.indexOf(takeId);
+  if (at < 0 || countOf(b, leave) < 1) return b;
+  const after = take(b, leave, 1);
+  return { ...add(after, takeId, 1), shelf: b.shelf.map((x, i) => (i === at ? leave : x)) };
 }
 
 export const pay = (b: BagState, price: number): BagState => (b.coins >= price ? { ...b, coins: b.coins - price } : b);
@@ -218,5 +284,5 @@ export function fishFor(bank: "near" | "far" | "sea", pull: "nibble" | "pull"): 
 export function normalizeBag(raw: unknown): BagState {
   const r = (raw ?? {}) as Partial<BagState>;
   const d = initialBag();
-  return { ...d, ...r, items: { ...r.items }, found: Array.isArray(r.found) ? r.found.filter(isItem) : [], tools: Array.isArray(r.tools) ? r.tools : [], gaveAt: { ...r.gaveAt }, built: Array.isArray(r.built) ? r.built : [] };
+  return { ...d, ...r, items: { ...r.items }, found: Array.isArray(r.found) ? r.found.filter(isItem) : [], tools: Array.isArray(r.tools) ? r.tools : [], gaveAt: { ...r.gaveAt }, built: Array.isArray(r.built) ? r.built : [], lanterns: Array.isArray(r.lanterns) ? r.lanterns.filter((l) => LANTERN_PAINTS.includes(l?.colour) && LANTERN_SHAPES.includes(l?.shape)).slice(0, MAX_LANTERNS) : [], nature: Array.isArray(r.nature) ? r.nature.filter(isItem) : [], shelf: Array.isArray(r.shelf) && r.shelf.length ? r.shelf.filter(isItem) : d.shelf };
 }
