@@ -97,6 +97,25 @@ export function readBag(store: Storage | null = storage()): BagState {
   }
 }
 
+// Whether the tip about what to try next shows on screen.
+const TIPS_KEY = "lantern-night:tips";
+
+export function readTips(store: Storage | null = storage()): boolean {
+  try {
+    return store?.getItem(TIPS_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
+export function writeTips(on: boolean, store: Storage | null = storage()): void {
+  try {
+    store?.setItem(TIPS_KEY, on ? "on" : "off");
+  } catch {
+    // It just won't last past this visit.
+  }
+}
+
 // --- Your look and your home --------------------------------------------------------
 // Kept apart from the chapter save: starting over keeps how you look and your home.
 

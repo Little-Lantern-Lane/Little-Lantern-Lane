@@ -4,6 +4,7 @@
 
 import * as THREE from "three";
 import { FISHING_SPOTS, NODES, riverMidX, WOODS, type GatherNode } from "../../game/layout";
+import { distToTrail, TRAILS } from "../../game/layout";
 import type { ItemId } from "../../logic/bag";
 import type { WorldState } from "../../logic/world";
 import { flow, lantern, own, paint, seeded, seeThrough, soft, waterSheet } from "../kit";
@@ -341,12 +342,15 @@ export function buildWoods(): WoodsKit {
   const treeAt = (x: number, z: number, sc: number, far: boolean) => (farSide(x, z) ? slender(x, z, sc, far) : hazel(x, z, sc, far));
   const inGlade = (x: number, z: number) => GLADES.some(([a, b, rr]) => Math.hypot(a - x, b - z) < rr);
 
+  /** The way out of the wood stays open: no trees on it, or leaning over it. */
+  const nearExit = (x: number, z: number) => distToTrail(x * 55, z, TRAILS.woodsExit) < 5;
+
   // Standing trees all through the wood, kept clear of paths, glades and what you gather.
   for (let i = 0, made = 0; i < 4000 && made < 300; i++) {
     const x = WEST + 3 + r() * (EAST - WEST - 6);
     const z = -B + r() * 2 * B;
     if (Math.abs(z - trailZ(x)) < 2.8 || distToPath(x, z) < 2.2 || inGlade(x, z) || !clear(x, z, 2.1) || !offRiver(x, z, 3.2)) continue;
-    if (Math.abs(x - X(WOODS.gate)) < 4 && Math.abs(z) < 6) continue;
+    if ((Math.abs(x - X(WOODS.gate)) < 4 && Math.abs(z) < 6) || nearExit(x, z)) continue;
     const sc = 0.85 + r() * 0.5;
     treeAt(x, z, sc, made % 6 !== 0);
     blockers.push({ X: x, Z: Z + z, r: 0.42 * sc });
@@ -354,7 +358,7 @@ export function buildWoods(): WoodsKit {
   }
   // The forest closes in on every side, thick enough that the edge is just more trees.
   const wall = (x: number, z: number) => {
-    if (offRiver(x, z, 2)) treeAt(x, z, 1.25 + r() * 0.8, true);
+    if (offRiver(x, z, 2) && !nearExit(x, z)) treeAt(x, z, 1.25 + r() * 0.8, true);
   };
   for (let x = WEST - 12; x < EAST + 12; x += 2.6) {
     for (const depth of [1.5, 5, 9, 14, 20]) {

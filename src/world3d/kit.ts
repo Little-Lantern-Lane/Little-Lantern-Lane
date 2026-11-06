@@ -75,6 +75,22 @@ export function lantern(m: THREE.Material): THREE.Group {
   return g;
 }
 
+/** A copy of a round shape with a dent pushed into its side, so the dent shows in its outline. */
+export function dented(round: THREE.BufferGeometry): THREE.BufferGeometry {
+  const g = round.clone();
+  const pos = g.attributes.position as THREE.BufferAttribute;
+  const dir = new THREE.Vector3(0.88, 0.12, 0.46).normalize();
+  const p = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    p.fromBufferAttribute(pos, i);
+    const k = (p.clone().normalize().dot(dir) - 0.8) / 0.2;
+    if (k > 0) p.multiplyScalar(1 - 0.62 * k * k * (3 - 2 * k));
+    pos.setXYZ(i, p.x, p.y, p.z);
+  }
+  g.computeVertexNormals();
+  return g;
+}
+
 /** A ground sheet for one place, from a painted canvas. */
 export function groundFrom(canvas: HTMLCanvasElement, w: number, d: number): THREE.Mesh {
   const t = new THREE.CanvasTexture(canvas);

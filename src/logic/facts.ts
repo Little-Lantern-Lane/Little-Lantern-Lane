@@ -71,7 +71,7 @@ export const HOTSPOTS: Record<Variant, Hotspot[]> = {
       id: "lanterns",
       name: "The lanterns",
       shameView: "Ruined. All of them.",
-      fact: "Ten are fine. Two are dented. Paper and wire bend back.",
+      fact: "Eleven are fine. The red one has a dent. Paper and wire bend back.",
     },
     SHARED.stone,
   ],

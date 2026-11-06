@@ -194,8 +194,22 @@ describe("what lasts between games", () => {
     expect(b.built).toEqual(["bridge"]);
     expect(applyBagEvent(initialBag(), { name: "prop", arg: "on:sign_up" }).built).toEqual([]);
     const w = { ...initialState().world, props: ["bridge"] };
-    expect(applyWorldEvent(w, { name: "chapter", arg: "7" }).props).toEqual([]);
+    expect(applyWorldEvent(w, { name: "chapter", arg: "7" }).props).toEqual(["bridge"]);
     expect(applyWorldEvent(w, { name: "chapter", arg: "4" }).props).toEqual(["bridge"]);
     expect(applyEvent(initialState(), { name: "prop", arg: "on:bridge" }).bag.built).toEqual(["bridge"]);
+  });
+});
+
+describe("the paths stay clear", () => {
+  const paths = [TRAILS.toBeach, TRAILS.toMill, TRAILS.toWoods];
+  const away = (x: number, z: number) => Math.min(...paths.map((t) => distToTrail(x, z, t)));
+
+  it("keeps the shelf, the nature table and the map board off the paths", () => {
+    for (const u of [USABLES.swap_shelf, USABLES.nature_table]) expect(away(u.x, u.z! - 0.9), u.label).toBeGreaterThan(3);
+    for (const m of MAP_BOARDS.filter((m) => m.x < 3400)) expect(away(m.x, m.z)).toBeGreaterThan(3);
+  });
+
+  it("keeps people in the village off the paths", () => {
+    for (const [who, x] of Object.entries(NPC_SPOTS.hub)) if (x > 2050 && x < 3400) expect(away(x, 1), who).toBeGreaterThan(1.9);
   });
 });

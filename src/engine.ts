@@ -62,6 +62,7 @@ export class Engine {
     );
     this.story.BindExternalFunction("distress", () => distress(), false);
     this.story.BindExternalFunction("bag_count", (id: string) => (isItem(id) ? countOf(bag(), id) : 0), false);
+    this.story.BindExternalFunction("has_built", (id: string) => bag().built.includes(id), false);
     this.story.BindExternalFunction("can_gift", (who: string) => FRIENDS.includes(who as Friend) && canGift(bag(), who as Friend), false);
     this.setVar("variant", variant);
   }

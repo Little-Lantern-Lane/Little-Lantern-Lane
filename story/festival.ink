@@ -50,6 +50,7 @@ VAR next_chapter = 0      // which chapter a save point leads into
 VAR nature_count = 0      // set by the TS layer: how much is on Juno's table
 VAR nature_new = false    // set by the TS layer: you've just brought something
 VAR next_giver = "mara"   // set by the TS layer: who starts the next part of the story
+VAR player_name = "Robin"  // what you chose to be called
 VAR woods_stage = 0       // 0 mending the bridge, 1 the far bank is open, 2 the lantern is hung
 VAR has_rod = false
 VAR has_hammer = false
@@ -66,6 +67,7 @@ VAR bakers_like = false
 VAR kids_like = false
 EXTERNAL bag_count(id)
 EXTERNAL can_gift(who)
+EXTERNAL has_built(id)
 // Conversations: which part of the story we're in, and who you've talked to in it
 VAR phase = ""            // "afternoon" | "facts" | "festival" | "day2" | "after_storm"
 VAR seen_nell = ""
@@ -352,7 +354,7 @@ tobin/embarrassed: I laugh when I'm nervous. It wasn't about you. #event: fact t
 === fact_bakers ===
 ~ facts_seen++
 { hide_count > 0:
-    oda: There you are. We missed you at the candles last night.
+    oda: There you are, {player_name}. We missed you at the candles last night.
 - else:
     wren/worried: Is it sundown? It feels like sundown.
 }
@@ -386,7 +388,7 @@ Anyone could catch a foot on it.
 { variant == "promise":
     You count them. Eleven are fine. Her grandmother's lantern has a long tear down one side. #event: fact lanterns
 - else:
-    You count them. Ten are fine. Two are dented. Paper and wire bend back. #event: fact lanterns
+    You count them. Eleven are fine. The red one has a dent. Paper and wire bend back. #event: fact lanterns
 }
 ->->
 
@@ -403,7 +405,7 @@ Ash hands you a candle in a jar. It's warm in your hands. #event: get candle
 
 === fact_mara_nell ===
 ~ facts_seen++
-nell: There you are. Mara came down this lane last night with a candle, asking after you.
+nell: There you are, {player_name}. Mara came down this lane last night with a candle, asking after you.
 + ["Was she angry?"]
     nell/laugh: Angry? She was worried sick. She kept saying, "Are they okay? That looked like it hurt."
 + ["What did you tell her?"]
@@ -481,7 +483,7 @@ Mara looks over. Tobin is next to her.
 }
 
 = full
-mara/surprised: There you are! #event: settle full
+mara/surprised: {player_name}! There you are! #event: settle full
 mara/worried: Are you okay? That looked like it hurt.
 tobin/sad: Sorry I laughed. I went down on that same stone myself. Laughing is what I do instead of hiding.
 tobin/laugh: Mostly.
@@ -490,7 +492,7 @@ tobin/laugh: Mostly.
     mara/sad: It was my grandmother's.
     You keep your head up. It doesn't close the tear.
 - else:
-    tobin/smile: Two are dented. Dents give them character.
+    tobin/smile: Only the red one's dented. Dents give them character.
 }
 mara/smile: Help me get them up before sundown?
 Hang the lanterns along the string. #scene: hang
@@ -591,16 +593,16 @@ Mara is by the fountain with the lanterns. Go to her. The pull to hide will drag
     You work on it side by side until the last seam is down. #event: mend
 + { variant == "promise" } ["I'll buy you a new one."]
     mara/sad: That's kind. It wouldn't be hers, though.
-+ { variant == "main" } [Help fix the two dented lanterns]
++ { variant == "main" } [Help fix the dented lantern]
     ~ part_b = true
-    Mara holds them steady. Bend the wire back into shape. #scene: mend
+    Mara holds it steady. Bend the wire back into shape. #scene: mend
     ++ [·]
     Good as new. Nearly. #event: oa_step
 + [Leave it]
     { variant == "promise":
         The torn lantern stays on the fountain step.
     - else:
-        You set the dented ones aside.
+        You set the dented one aside.
     }
 -
 -> let_go
@@ -643,7 +645,7 @@ Hang the lanterns along the string. #scene: hang
         At sundown the lanterns are lit. Her grandmother's lantern glows with a gold seam down one side. #event: hang 12
         mara/warm: I think I like it better.
     - else:
-        At sundown all twelve are lit, dents and all. #event: hang 12
+        At sundown all twelve are lit, dent and all. #event: hang 12
     }
     Your heart was racing an hour ago. Now it's slow. #event: settle full
     The square fills with light, and it spills down the lanes as far as your door. #event: ripple full
@@ -890,7 +892,7 @@ tobin: Help me sort the broken lanterns? Two piles: fixable and not.
 ~ task = ""
 ~ carried_bread = true
 ~ tasks_done++
-You set the trays down by the fountain. They were heavier than they looked. #event: tire
+You set the trays down by the fountain. They were heavier than they looked. #event: tire #event: prop on:bread_trays
 -> body_notice ->
 ->->
 
@@ -959,19 +961,19 @@ You sit on the fountain wall and check in. Not with the list. With yourself. #sc
 ~ rest_ok = true
 The tiredness matches what's happening: three hours of sleep, and you've been going since dawn. The guilt about stopping doesn't.
 Resting isn't the same as hiding. Hiding gets you away from a feeling. Resting looks after the person who's having it.
-The difference is how you go: tell someone, say when you'll be back, and then really rest.
+The difference is how you go: tell someone, say when you'll be back, and then really rest. #event: story_goal tell_rest
 -> day_two_hub
 
 === tell_ash ===
 + ["I'm wiped out. Could you take my stall this afternoon? I'll be back for the last night."]
     ~ told = true
-    ash/warm: Finally. Go. I've got it.
+    ash/warm: Finally. Go. I've got it. #event: story_goal go_rest
 - ->->
 
 === tell_mara ===
 + ["I need to rest this afternoon. I'll be back for the last night."]
     ~ told = true
-    mara/smile: Of course. Thank you for telling me. I'd have worried.
+    mara/smile: Of course. Thank you for telling me. I'd have worried. #event: story_goal go_rest
 - ->->
 
 === hollow_choice ===
@@ -1001,14 +1003,14 @@ You don't let the shell come this time. You just sit, back against the cool ston
     Down below, someone knows where you are. Nothing needs you for a few hours.
 }
 The afternoon goes by without you. It turns out that's allowed.
-You wake as the sun is going down. #event: sunset
+You wake as the sun is going down. #event: sunset #event: story_goal last_night
 { rest_kind == "full":
     Your head is clear. Your hands are steady.
 - else:
     You feel better. Not all the way. Your body is still catching up.
 }
 { not told:
-    mara/worried: There you are! I looked everywhere.
+    mara/worried: {player_name}! There you are. I looked everywhere.
     mara/smile: You look better, though. Good.
 }
 -> chapter_two_done
@@ -1234,11 +1236,11 @@ nell/smile: I'll go and see Mara tomorrow. Bring her something. Something yellow
     - "afternoon": ash/smile: Tea when you're done? I'm saving you the chipped cup. It's your favorite, don't argue.
     - "facts":
         { hide_count > 0:
-            ash/worried: Hey. There you are.
+            ash/worried: Hey, {player_name}. There you are.
         - else:
             ash: Hey.
         }
-    - "festival": ash/smile: There you are.
+    - "festival": ash/smile: There you are, {player_name}.
     - "day2": ash: Morning.
     - else: ash/warm: Here. Hot. Drink it.
     }
@@ -1434,7 +1436,7 @@ tobin: Mind the stone.
 { seen_mara != phase:
     ~ seen_mara = phase
     { phase:
-    - "afternoon": mara/worried: There you are. Okay. Okay. Lanterns, then bread, then candles, then... okay.
+    - "afternoon": mara/worried: There you are, {player_name}. Okay. Okay. Lanterns, then bread, then candles, then... okay.
     - "festival": mara/smile: Hi.
     - "day2": mara/worried: Morning! Sorry. Morning. I've got a list.
     - else: mara/surprised: We're all still here.
@@ -1715,6 +1717,8 @@ pip/laugh: BYE!
     -> hub_kids -> h
 + [Talk to Fen #talk: fen]
     -> hub_fen -> h
++ [Make something at your table #use: craft_table]
+    -> make_things -> h
 + [Look at the swap shelf #use: swap_shelf]
     -> hub_swap -> h
 + [Look at Juno's nature table #use: nature_table]
@@ -1745,7 +1749,7 @@ A table with everything laid out in rows, and a label in Juno's careful writing 
     ->->
 
 === hub_fen ===
-fen/laughing: Fresh fish! Well. Fish! Don't look at me like that, it was fresher when you came in.
+fen/laughing: {player_name}! Fresh fish! Well. Fish! Don't look at me like that, it was fresher when you came in.
 - (menu)
 + [Sell Fen some fish]
     fen: I'll give you a bit over, mind. Someone has to keep the sea in business.
@@ -1766,9 +1770,9 @@ You think about the house. #scene: homelook
 
 === hub_nell ===
 { next_giver == "nell":
-    nell/warm: There you are. You look like you've been up all night. There's a lot to do today.
+    nell/warm: There you are, {player_name}. You look like you've been up all night. There's a lot to do today.
 - else:
-    nell/smile: There you are. Sit down if you're stopping.
+    nell/smile: There you are, {player_name}. Sit down if you're stopping.
 }
 - (menu)
 + {next_giver == "nell"} ["I'm ready."]
@@ -1787,12 +1791,12 @@ You think about the house. #scene: homelook
 { next_giver == "tobin":
     tobin: Hesketh sent a letter. The sea's been rough at Saltmouth. Will you come with me?
 - else:
-    tobin/laugh: Mind the glue. What can I do for you?
+    tobin/laugh: Mind the glue, {player_name}. What can I do for you?
 }
 - (menu)
 + {next_giver == "tobin"} ["I'm ready."]
     -> start_next -> menu
-+ [Sell him some stones]
++ [Sell him stones or shells]
     -> sell_to("tobin") -> menu
 + ["Could you make something for my house?"]
     tobin/smile: I've been hoping someone would ask that.
@@ -1817,7 +1821,7 @@ Tobin clears a corner of the bench. #scene: lanterns
 { next_giver == "ash":
     ash/worried: Today's the real opening, with the whole village coming. Will you help me get ready?
 - else:
-    ash/smile: Sit anywhere. Anything you've dried, steeped or found under a tree, I'll take it.
+    ash/smile: Sit anywhere, {player_name}. Anything you've dried, steeped or found under a tree, I'll take it.
 }
 - (menu)
 + {next_giver == "ash"} ["I'm ready."]
@@ -1825,7 +1829,7 @@ Tobin clears a corner of the bench. #scene: lanterns
 + ["What are you pouring today?"]
     ash/smile: Mint if you want to feel awake. The mill blend if you want to feel like you've been somewhere.
     -> shop_with("ash") -> menu
-+ [Sell Ash some mushrooms]
++ [Sell Ash mushrooms or sea plants]
     -> sell_to("ash") -> menu
 + {can_gift("ash")} [Give Ash something]
     -> gift_to("ash") -> menu
@@ -1836,7 +1840,7 @@ Tobin clears a corner of the bench. #scene: lanterns
 { next_giver == "oda":
     oda/worried: Snow's coming in hard, and Hettie's on nights. Could you be home this evening?
 - else:
-    wren/smile: Fruit's welcome. Windfalls are fine, they're going in a pie.
+    wren/smile: Fruit's welcome, {player_name}. Windfalls are fine, they're going in a pie.
 }
 - (menu)
 + {next_giver == "oda"} ["I'm ready."]
@@ -1855,7 +1859,7 @@ Tobin clears a corner of the bench. #scene: lanterns
 
 === hub_mara ===
 { next_giver == "mara":
-    mara/warm: There you are. I was hoping I'd see you. Have you got a minute?
+    mara/warm: There you are, {player_name}. I was hoping I'd see you. Have you got a minute?
 - else:
     mara/warm: I've made a list of things to do today. It's a short list. I'm trying that.
 }
@@ -1868,7 +1872,7 @@ Tobin clears a corner of the bench. #scene: lanterns
     ->->
 
 === hub_kids ===
-pip/happy: We're EXPLORING. Juno's counting.
+pip/happy: {player_name}! We're EXPLORING. Juno's counting.
 juno: There are twelve lanterns on the string. I checked.
 - (menu)
 + {can_gift("pip")} [Give Pip something]
@@ -1899,9 +1903,12 @@ Chapter three is done. #scene: save
 === woods ===
 The week after the storm. #event: chapter 7 #event: woods_goal 0 #event: place mara:680
 ~ phase = "woods"
+{ has_built("bridge"):
+    -> woods_again
+}
 The rain stopped two days ago. The lanes are full of branches and the whole village smells of wet wood.
 You wake up with nothing to do. It feels odd, like a stair that isn't there.
-mara: There you are. Have you seen the footbridge?
+mara: There you are, {player_name}. Have you seen the footbridge?
 "The one over the river?" you ask.
 mara/sad: It's been roped off for years, and the storm finished it. Now there's two posts and a lot of river.
 mara: Nobody needs it this week. That's what's so nice about it. I'd just like to mend something that can actually be mended.
@@ -1939,6 +1946,21 @@ Past the gate, the woods have been left to themselves for years. Nobody's quite 
 + [Make something at your table #use: craft_table]
     -> make_things -> hub
 + {woods_stage >= 2} [Walk home #go: home] -> woods_done
+
+// Playing the week again, or coming back to it, with the bridge already up.
+=== woods_again ===
+The rain stopped two days ago. The lanes are full of branches and the whole village smells of wet wood.
+{ has_built("bridge_lantern"):
+    ~ woods_stage = 2
+    ~ phase = "woods_end"
+    Down through the trees you can just see the little lantern, still tied to its post on the bridge. #event: woods_goal 2
+- else:
+    ~ woods_stage = 1
+    ~ phase = "woods_far"
+    The footbridge is still standing, every plank of it. The far bank is waiting. #event: woods_goal 1
+}
+mara/warm: There you are, {player_name}. The bridge held. I went down and checked. Twice. #event: place mara:16700
+-> woods_hub
 
 === woods_done ===
 You sleep with the window open. In the morning there's still a little river in your ears.
@@ -2132,7 +2154,7 @@ Everyone drifts back up the lane for supper. #event: unplace tobin #event: unpla
 + {woods_stage == 1} ["What does the lantern need again?"]
     tobin: Two strips of birch bark for the shade. One glowcap. One piece of skyglass. All from the far bank if you like, though the birch grows on both.
     -> menu
-+ [Sell him some stones]
++ [Sell him stones or shells]
     tobin: Stones and shiny things. I grind them down for colour. It's why everything I own is slightly blue.
     -> sell_to("tobin") -> menu
 + ["Could you make something for my house?"]
@@ -2185,7 +2207,7 @@ Ash opens in the morning. For now, you can stay as long as you like.
     }
 }
 - (menu)
-+ [Sell Ash some mushrooms]
++ [Sell Ash mushrooms or sea plants]
     ash: Anything I can dry, steep or put in a soup. My mother would ask for a receipt.
     -> sell_to("ash") -> menu
 + {not ash_likes} ["What would you put on the menu, if you could have anything?"]

@@ -9,11 +9,22 @@ export type Mood = "day" | "night" | "shame" | "hollow" | "festival" | "silent";
 export type Sfx =
   | "step" | "pickup" | "blip" | "fact" | "trip" | "shell" | "light"
   | "hang" | "heartbeat" | "ui" | "mend" | "door" | "ending";
+export interface Nature {
+  gulls: number;
+  birds: number;
+  insects: number;
+  brook: number;
+  fountain: number;
+}
 export interface Sound {
   /** Call from the first user gesture; creates/resumes the AudioContext. Safe to call repeatedly. */
   unlock(): void;
   /** Crossfade (about 2 s) to the generative music for this mood. */
   setMood(mood: Mood): void;
+  /** How much of the sea to hear, 0..1, on top of whatever music is playing. 0 stops it altogether. */
+  setWaves(level: number): void;
+  /** How much of the gulls, birds, insects, river and fountain to hear, each 0..1, on top of the music. All 0 stops them. */
+  setNature(levels: Nature): void;
   /** One-shot effect. pitch is a multiplier (1 = default); used e.g. for per-character dialogue blips. */
   play(sfx: Sfx, opts?: { pitch?: number; volume?: number }): void;
   /** 0..1 master volume. */
@@ -222,6 +233,7 @@ function noise(e: Engine, dest: AudioNode, o: NoiseOpts): void {
   const { ctx } = e;
   const src = ctx.createBufferSource();
   src.buffer = e.noise;
+  src.loop = true; // a long wash can outlast the shared buffer
   const f = ctx.createBiquadFilter();
   f.type = o.filter;
   f.Q.value = o.q ?? 1;
@@ -551,9 +563,553 @@ class MoodPlayer {
 }
 
 // ---------------------------------------------------------------------------
+// The sea. Not a mood: it plays alongside the music, wherever the shore can be heard. A quiet hush
+// runs all the time, and over it each wave swells, breaks to one side and drains away as foam. It
+// runs only near the water, because the audio thread has little to spare in the busier places.
+
+const WAVES_LEVEL = 1;
+const WAVES_WET = 0.12;
+/** How quickly the sea follows you, as a time constant in seconds. */
+const WAVES_EASE = 0.7;
+/** How long after you leave the shore the sea is shut down. */
+export const WAVES_FADE_MS = 4000;
+
+/** Seconds from one wave to the next. Each lasts about as long, so they run on into each other. */
+export const nextWaveGap = () => rand(6.5, 11.5);
+
+/** The top of what you can hear: distance takes the hiss off the sea before it takes the rumble. */
+export const wavesCutoff = (level: number) => 300 * Math.pow(2, 4.5 * level);
+
+class WavesPlayer {
+  private out: GainNode;
+  private send: GainNode;
+  private tone: BiquadFilterNode;
+  private pans: StereoPannerNode[];
+  private hush: AudioBufferSourceNode[];
+  private hushTone: BiquadFilterNode;
+  private hushLevel: GainNode;
+  private next: number;
+  private level = 0;
+  private closing: ReturnType<typeof setTimeout> | null = null;
+
+  constructor(private e: Engine) {
+    const { ctx } = e;
+    this.out = ctx.createGain();
+    this.out.gain.value = 0.0001;
+    this.send = ctx.createGain();
+    this.send.gain.value = WAVES_WET;
+    this.tone = ctx.createBiquadFilter();
+    this.tone.type = "lowpass";
+    this.tone.Q.value = 0.4;
+    this.tone.connect(this.out).connect(e.master);
+    this.out.connect(this.send).connect(e.reverb);
+    this.pans = [-0.45, 0, 0.45].map((side) => {
+      const p = ctx.createStereoPanner();
+      p.pan.value = side;
+      p.connect(this.tone);
+      return p;
+    });
+    this.hushTone = ctx.createBiquadFilter();
+    this.hushTone.type = "lowpass";
+    this.hushTone.frequency.value = 420;
+    this.hushLevel = ctx.createGain();
+    this.hushLevel.gain.value = 0.16;
+    this.hushTone.connect(this.hushLevel);
+    // Two copies at different speeds, one to each side, so the short noise buffer never audibly repeats.
+    this.hush = [0.93, 1.07].map((rate, i) => {
+      const src = ctx.createBufferSource();
+      src.buffer = e.noise;
+      src.loop = true;
+      src.playbackRate.value = rate;
+      const pan = ctx.createStereoPanner();
+      pan.pan.value = i === 0 ? -0.6 : 0.6;
+      src.connect(pan).connect(this.hushTone);
+      src.start();
+      return src;
+    });
+    this.hushLevel.connect(this.tone);
+    this.next = ctx.currentTime + 0.3;
+  }
+
+  setLevel(level: number, onGone: () => void): void {
+    this.level = level;
+    const now = this.e.ctx.currentTime;
+    this.out.gain.setTargetAtTime(Math.max(0.0001, level * WAVES_LEVEL), now, WAVES_EASE);
+    this.tone.frequency.setTargetAtTime(wavesCutoff(level), now, WAVES_EASE);
+    if (level > 0) {
+      if (this.closing) clearTimeout(this.closing);
+      this.closing = null;
+    } else if (!this.closing) {
+      this.closing = setTimeout(() => {
+        this.stop();
+        onGone();
+      }, WAVES_FADE_MS);
+    }
+  }
+
+  /** Schedule the next wave once it comes inside the lookahead. */
+  tick(): void {
+    if (this.level <= 0) return;
+    const now = this.e.ctx.currentTime;
+    this.next = catchUp(this.next, now);
+    while (this.next < now + LOOKAHEAD) {
+      this.wave(this.next);
+      this.next += nextWaveGap();
+    }
+  }
+
+  private wave(t: number): void {
+    const { e, tone } = this;
+    const size = rand(0.65, 1);
+    const side = pick(this.pans);
+    // The swell coming in, the break as it falls, and the foam draining back down the sand.
+    noise(e, tone, { t, peak: 0.5 * size, attack: 2.4, hold: 0.3, decay: 3.2, filter: "lowpass", freq: 140, to: 520, q: 0.5 });
+    noise(e, side, { t: t + 1.9, peak: 0.4 * size, attack: 0.7, hold: 0.2, decay: 2.6, filter: "bandpass", freq: 1800, to: 500, q: 0.5 });
+    noise(e, side, { t: t + 2.8, peak: 0.16 * size, attack: 0.9, decay: 4.6, filter: "highpass", freq: 2800, to: 5000, q: 0.4 });
+  }
+
+  private stop(): void {
+    for (const src of this.hush) {
+      src.stop();
+      src.disconnect();
+    }
+    for (const n of [...this.pans, this.hushTone, this.hushLevel, this.tone, this.send, this.out]) n.disconnect();
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Effects. Each gets its own output gain (volume) and a reverb amount.
 
 type SfxFn = (e: Engine, out: AudioNode, t: number, p: number) => void;
+// ---------------------------------------------------------------------------
+// Gulls, birds and the brook. Like the sea, not a mood: they play alongside the music, and only
+// where they can be heard. Gulls and birds are scattered calls; the river is a light, low flow
+// with a few soft ripples over it.
+
+const GULLS_LEVEL = 0.28;
+const BIRDS_LEVEL = 0.8;
+const INSECTS_LEVEL = 1.3;
+const BROOK_LEVEL = 0.28;
+const FOUNTAIN_LEVEL = 0.3;
+const NATURE_WET = 0.1;
+/** How quickly each sound follows you, as a time constant in seconds. */
+const NATURE_EASE = 0.6;
+/** How long after the last of them goes quiet they are shut down. */
+export const NATURE_FADE_MS = 4000;
+
+/** Seconds from one gull's cry, or one bird's song, to the next. */
+export const nextGullGap = () => rand(5, 14);
+export const nextBirdGap = () => rand(2.5, 8);
+/** Seconds from one cricket, or passing bee, to the next. */
+export const nextInsectGap = () => rand(3, 9);
+/** Seconds between drops landing in the fountain's basin. */
+export const nextDropGap = (level: number) => rand(0.04, 0.16) / Math.max(0.3, level);
+/** Seconds between ripples. A few near the bank; further off, hardly any. */
+export const nextBubbleGap = (level: number) => rand(0.08, 0.4) / Math.max(0.2, level);
+
+const audible = (n: Nature) => Object.values(n).some((level) => level > 0);
+
+class NaturePlayer {
+  private out: GainNode;
+  private send: GainNode;
+  private layers: Record<keyof Nature, GainNode>;
+  private levels: Nature = { gulls: 0, birds: 0, insects: 0, brook: 0, fountain: 0 };
+  private rush: AudioBufferSourceNode[] = [];
+  private rushNodes: AudioNode[] = [];
+  private spray: AudioBufferSourceNode | null = null;
+  private sprayNodes: AudioNode[] = [];
+  private next: Record<keyof Nature, number>;
+  private closing: ReturnType<typeof setTimeout> | null = null;
+
+  constructor(private e: Engine) {
+    const { ctx } = e;
+    this.out = ctx.createGain();
+    this.out.connect(e.master);
+    this.send = ctx.createGain();
+    this.send.gain.value = NATURE_WET;
+    this.out.connect(this.send).connect(e.reverb);
+    const layer = () => {
+      const g = ctx.createGain();
+      g.gain.value = 0.0001;
+      g.connect(this.out);
+      return g;
+    };
+    this.layers = { gulls: layer(), birds: layer(), insects: layer(), brook: layer(), fountain: layer() };
+    const now = ctx.currentTime;
+    this.next = { gulls: now + rand(0.5, 3), birds: now + rand(0.3, 1.5), insects: now + rand(1, 4), brook: now + 0.2, fountain: now + 0.2 };
+  }
+
+  setLevels(levels: Nature, onGone: () => void): void {
+    this.levels = levels;
+    const now = this.e.ctx.currentTime;
+    this.layers.gulls.gain.setTargetAtTime(Math.max(0.0001, levels.gulls * GULLS_LEVEL), now, NATURE_EASE);
+    this.layers.birds.gain.setTargetAtTime(Math.max(0.0001, levels.birds * BIRDS_LEVEL), now, NATURE_EASE);
+    this.layers.insects.gain.setTargetAtTime(Math.max(0.0001, levels.insects * INSECTS_LEVEL), now, NATURE_EASE);
+    this.layers.brook.gain.setTargetAtTime(Math.max(0.0001, levels.brook * BROOK_LEVEL), now, NATURE_EASE);
+    this.layers.fountain.gain.setTargetAtTime(Math.max(0.0001, levels.fountain * FOUNTAIN_LEVEL), now, NATURE_EASE);
+    if (levels.brook > 0 && !this.rush.length) this.startRush();
+    if (levels.fountain > 0 && !this.spray) this.startSpray();
+    if (audible(levels)) {
+      if (this.closing) clearTimeout(this.closing);
+      this.closing = null;
+    } else if (!this.closing) {
+      this.closing = setTimeout(() => {
+        this.stop();
+        onGone();
+      }, NATURE_FADE_MS);
+    }
+  }
+
+  /** Schedule whatever comes inside the lookahead. */
+  tick(): void {
+    const now = this.e.ctx.currentTime;
+    const horizon = now + LOOKAHEAD;
+    const run = (kind: keyof Nature, play: (t: number) => void, gap: () => number) => {
+      if (this.levels[kind] <= 0) return;
+      this.next[kind] = catchUp(this.next[kind], now);
+      while (this.next[kind] < horizon) {
+        play(this.next[kind]);
+        this.next[kind] += gap();
+      }
+    };
+    run("gulls", (t) => this.gull(t), nextGullGap);
+    run("birds", (t) => this.bird(t), nextBirdGap);
+    run("insects", (t) => this.insect(t), nextInsectGap);
+    run("brook", (t) => this.bubble(t), () => nextBubbleGap(this.levels.brook));
+    run("fountain", (t) => this.drop(t), () => nextDropGap(this.levels.fountain));
+  }
+
+  /** Calls come from all around: a path into a layer from a random side. */
+  private from(layer: GainNode): StereoPannerNode {
+    const p = this.e.ctx.createStereoPanner();
+    p.pan.value = rand(-0.7, 0.7);
+    p.connect(layer);
+    return p;
+  }
+
+  /**
+   * A herring gull. Real gulls have two voices, and neither sits in between: a high "kyow" with
+   * its fundamental around 1.2 to 1.5 kHz, and a low, barking "kek" around 370 Hz. Most often this
+   * plays a long call, one drawn-out note and then a run of shorter ones. Each note is one voice
+   * that falls late, and it only roughens briefly, near the end. Far-off gulls lose their top.
+   */
+  private gull(t: number): void {
+    const { e } = this;
+    const { ctx } = e;
+    const kind = pick(["long", "long", "long", "kyow", "kek"] as const);
+    const distant = chance(0.35);
+    const distance = distant ? rand(0.25, 0.45) : rand(0.8, 1);
+    const pitch = rand(0.94, 1.06);
+    const pace = rand(0.9, 1.12);
+    const roughness = rand(0.06, 0.16) * (distant ? 0.6 : 1);
+    const path = this.from(this.layers.gulls);
+
+    const out = ctx.createGain();
+    out.gain.value = 0.9 * distance; // Matching trim before GULLS_LEVEL.
+    out.connect(path);
+
+    const air = ctx.createBiquadFilter();
+    air.type = "lowpass";
+    air.frequency.value = distant ? rand(2300, 2900) : rand(4400, 5200);
+    air.Q.value = 0.5;
+    air.connect(out);
+
+    // Shared articulation filter: note envelopes do not overlap.
+    const mouth = ctx.createBiquadFilter();
+    mouth.type = "lowpass";
+    mouth.Q.value = 0.6;
+    mouth.connect(air);
+
+    const voice = ctx.createGain();
+    const nodes: AudioNode[] = [path, out, air, mouth, voice];
+
+    if (kind === "kek") {
+      // Low source pitch with strong upper harmonics gives a nasal bark.
+      const hp = ctx.createBiquadFilter();
+      hp.type = "highpass";
+      hp.frequency.value = 600;
+      hp.Q.value = 0.5;
+      voice.connect(hp);
+      let tail: AudioNode = hp;
+      nodes.push(hp);
+
+      const tract = rand(0.96, 1.04);
+      for (const [hz, db, q] of [[1230, 8, 1.6], [1990, 5, 2]]) {
+        const f = ctx.createBiquadFilter();
+        f.type = "peaking";
+        f.frequency.value = hz * tract;
+        f.gain.value = db;
+        f.Q.value = q;
+        tail.connect(f);
+        tail = f;
+        nodes.push(f);
+      }
+      tail.connect(mouth);
+    } else {
+      // Keep the fundamental and a coherent, sparse harmonic ladder.
+      voice.connect(mouth);
+    }
+
+    const count = kind === "long" ? pick([6, 7, 8])
+      : kind === "kek" ? pick([5, 6, 7, 8]) : pick([1, 1, 2]);
+
+    let at = t;
+    let last: OscillatorNode | undefined;
+
+    for (let i = 0; i < count; i++) {
+      const intro = kind === "long" && i === 0;
+      const u = i / Math.max(1, count - 1);
+
+      const len = pace * (intro ? rand(0.65, 0.85)
+        : kind === "kek" ? rand(0.10, 0.15)
+        : kind === "kyow" ? rand(0.36, 0.55)
+        : 0.29 - 0.07 * Math.sin(Math.PI * u) + rand(-0.015, 0.015));
+
+      // Repeated long-call notes become brighter, without a downward staircase.
+      const top = pitch * (intro ? rand(1050, 1200)
+        : kind === "kek" ? rand(365, 395)
+        : rand(1450, 1540) * (1 + 0.025 * Math.sin(Math.PI * u)));
+
+      const endRatio = intro ? rand(0.66, 0.73)
+        : kind === "kek" ? rand(0.85, 0.9) : rand(0.77, 0.82);
+
+      const level = (kind === "kek" ? 0.46 : 0.42)
+        * rand(0.88, 1)
+        * (i === count - 1 && count > 2 ? 0.8 : 1);
+
+      const osc = ctx.createOscillator();
+      osc.type = "sawtooth";
+      const amp = ctx.createGain();
+      amp.gain.value = 0;
+      osc.connect(amp).connect(voice);
+
+      // Half-frequency FM briefly adds subharmonic sidebands.
+      // It approximates rough phonation rather than adding an independent voice.
+      const mod = ctx.createOscillator();
+      mod.type = "sine";
+      const depth = ctx.createGain();
+      depth.gain.value = 0;
+      mod.connect(depth).connect(osc.frequency);
+
+      const points: readonly (readonly [number, number])[] = [
+        [0, intro ? 0.82 : 1],
+        [0.10, 1],
+        [0.43, 0.98],
+        [0.76, endRatio + 0.07],
+        [1, endRatio],
+      ];
+
+      for (const [param, ratio] of [
+        [osc.frequency, 1], [mod.frequency, 0.5],
+      ] as const) {
+        points.forEach(([x, y], j) => {
+          const value = top * y * ratio;
+          if (j === 0) param.setValueAtTime(value, at);
+          else param.exponentialRampToValueAtTime(value, at + x * len);
+        });
+      }
+
+      depth.gain.setValueAtTime(0, at);
+      depth.gain.linearRampToValueAtTime(top * 0.008, at + len * 0.35);
+      depth.gain.linearRampToValueAtTime(
+        top * roughness * (kind === "kek" ? 0.3 : 1),
+        at + len * 0.68,
+      );
+      depth.gain.linearRampToValueAtTime(0, at + len);
+
+      // Sustain enough amplitude to hear the falling "ow".
+      amp.gain.setValueAtTime(0, at);
+      amp.gain.linearRampToValueAtTime(level, at + len * 0.09);
+      amp.gain.linearRampToValueAtTime(level * 0.85, at + len * 0.48);
+      amp.gain.linearRampToValueAtTime(level * 0.38, at + len * 0.83);
+      amp.gain.linearRampToValueAtTime(0, at + len);
+
+      mouth.frequency.setValueAtTime(intro ? 2600 : 3300, at);
+      mouth.frequency.linearRampToValueAtTime(
+        kind === "kek" ? 4800 : 4500,
+        at + len * 0.16,
+      );
+      mouth.frequency.exponentialRampToValueAtTime(
+        kind === "kek" ? 2600 : 2100,
+        at + len,
+      );
+
+      noise(e, voice, {
+        t: at,
+        peak: level * (distant ? 0.018 : 0.035),
+        attack: 0.006,
+        decay: len * 0.6,
+        filter: "bandpass",
+        freq: intro ? 1500 : 2200,
+        q: 0.7,
+      });
+
+      nodes.push(osc, amp, mod, depth);
+      osc.start(at);
+      mod.start(at);
+      osc.stop(at + len + 0.06);
+      mod.stop(at + len + 0.06);
+      last = osc;
+
+      // Quicker middle and a slight easing at the end.
+      const gap = intro ? rand(0.22, 0.30)
+        : kind === "kek" ? 0.11 - 0.035 * Math.sin(Math.PI * u)
+        : kind === "kyow" ? rand(0.28, 0.42)
+        : 0.19 - 0.055 * Math.sin(Math.PI * u);
+
+      at += len + pace * gap * rand(0.94, 1.06);
+    }
+
+    // Every oscillator has a scheduled stop. Noise helpers clean up themselves.
+    // Audio-clock cleanup remains correct during lookahead or suspension.
+    if (last) {
+      last.onended = () => nodes.forEach((node) => node.disconnect());
+    }
+  }
+
+  /** One small songbird: a warble, a two-note whistle, or a quick trill. */
+  private bird(t: number): void {
+    const { e } = this;
+    const path = this.from(this.layers.birds);
+    const lift = rand(0.9, 1.2);
+    const far = rand(0.5, 1);
+    const song = pick(["warble", "whistle", "trill"] as const);
+    let at = t;
+    if (song === "warble") {
+      const notes = 3 + Math.floor(rand(0, 4));
+      for (let i = 0; i < notes; i++) {
+        const f = rand(2800, 4600) * lift;
+        const len = rand(0.06, 0.11);
+        tone(e, path, { t: at, freq: f, to: f * rand(0.8, 1.3), glide: len, peak: 0.07 * far, attack: 0.012, decay: len });
+        at += len + rand(0.02, 0.07);
+      }
+    } else if (song === "whistle") {
+      const f = rand(3100, 3700) * lift;
+      tone(e, path, { t: at, freq: f, to: f * 0.96, glide: 0.3, peak: 0.06 * far, attack: 0.04, hold: 0.16, decay: 0.16 });
+      at += 0.42;
+      tone(e, path, { t: at, freq: f * 0.82, to: f * 0.79, glide: 0.34, peak: 0.055 * far, attack: 0.04, hold: 0.18, decay: 0.18 });
+      at += 0.42;
+    } else {
+      const f = rand(3800, 5000) * lift;
+      const pulses = 7 + Math.floor(rand(0, 6));
+      for (let i = 0; i < pulses; i++) {
+        tone(e, path, { t: at, freq: f, to: f * 1.08, glide: 0.03, peak: 0.05 * far, attack: 0.006, decay: 0.035 });
+        at += 0.055;
+      }
+    }
+    setTimeout(() => path.disconnect(), (at - e.ctx.currentTime + 2) * 1000);
+  }
+
+  /** Mostly a cricket in the grass, now and then a bumblebee drifting across. */
+  private insect(t: number): void {
+    const { e } = this;
+    const path = this.from(this.layers.insects);
+    let at = t;
+    if (chance(0.75)) {
+      const f = rand(4200, 5000);
+      const far = rand(0.5, 1);
+      const chirps = 2 + Math.floor(rand(0, 3));
+      for (let c = 0; c < chirps; c++) {
+        for (let p = 0; p < 3; p++) tone(e, path, { t: at + p * 0.045, freq: f, peak: 0.05 * far, attack: 0.005, decay: 0.025 });
+        at += rand(0.32, 0.42);
+      }
+    } else {
+      const side = chance(0.5) ? -0.7 : 0.7;
+      const len = rand(2.2, 3.4);
+      const f = rand(170, 215);
+      path.pan.setValueAtTime(side, t);
+      path.pan.linearRampToValueAtTime(-side, t + len);
+      for (const detune of [-9, 8]) tone(e, path, { t, freq: f, to: f * rand(0.92, 1.08), glide: len, type: "sawtooth", peak: 0.018, attack: len * 0.4, hold: len * 0.1, decay: len * 0.5, detune, lowpass: 800 });
+      at += len;
+    }
+    setTimeout(() => path.disconnect(), (at - e.ctx.currentTime + 2) * 1000);
+  }
+
+  /** The rush of the water, two copies at different speeds so the noise buffer never audibly repeats. */
+  private startRush(): void {
+    const { e } = this;
+    const { ctx } = e;
+    const low = ctx.createBiquadFilter();
+    low.type = "bandpass";
+    low.frequency.value = 520;
+    low.Q.value = 0.5;
+    const high = ctx.createBiquadFilter();
+    high.type = "highpass";
+    high.frequency.value = 3200;
+    const lowLevel = ctx.createGain();
+    lowLevel.gain.value = 0.11;
+    const highLevel = ctx.createGain();
+    highLevel.gain.value = 0.006;
+    low.connect(lowLevel).connect(this.layers.brook);
+    high.connect(highLevel).connect(this.layers.brook);
+    this.rushNodes = [low, high, lowLevel, highLevel];
+    this.rush = [0.88, 1.13].map((rate, i) => {
+      const src = ctx.createBufferSource();
+      src.buffer = e.noise;
+      src.loop = true;
+      src.playbackRate.value = rate;
+      const pan = ctx.createStereoPanner();
+      pan.pan.value = i === 0 ? -0.5 : 0.5;
+      src.connect(pan);
+      pan.connect(low);
+      pan.connect(high);
+      src.start();
+      this.rushNodes.push(pan);
+      return src;
+    });
+  }
+
+  /** Water falling into the basin: one copy of the noise, as the Square has little audio to spare. */
+  private startSpray(): void {
+    const { e } = this;
+    const { ctx } = e;
+    const src = ctx.createBufferSource();
+    src.buffer = e.noise;
+    src.loop = true;
+    const splash = ctx.createBiquadFilter();
+    splash.type = "bandpass";
+    splash.frequency.value = 1500;
+    splash.Q.value = 0.7;
+    const basin = ctx.createBiquadFilter();
+    basin.type = "bandpass";
+    basin.frequency.value = 600;
+    basin.Q.value = 0.7;
+    const splashLevel = ctx.createGain();
+    splashLevel.gain.value = 0.11;
+    const basinLevel = ctx.createGain();
+    basinLevel.gain.value = 0.07;
+    src.connect(splash).connect(splashLevel).connect(this.layers.fountain);
+    src.connect(basin).connect(basinLevel).connect(this.layers.fountain);
+    src.start();
+    this.spray = src;
+    this.sprayNodes = [splash, basin, splashLevel, basinLevel];
+  }
+
+  /** One drop landing: brighter and quicker than the river's ripples. */
+  private drop(t: number): void {
+    const f = rand(700, 1900);
+    const len = rand(0.02, 0.05);
+    tone(this.e, this.layers.fountain, { t, freq: f, to: f * rand(1.2, 1.6), glide: len, peak: rand(0.04, 0.13), attack: 0.003, decay: len });
+  }
+
+  /** One ripple: a tiny, soft rising blip, just enough that the flow doesn't sound like plain hiss. */
+  private bubble(t: number): void {
+    const f = rand(320, 950);
+    const len = rand(0.04, 0.09);
+    tone(this.e, this.layers.brook, { t, freq: f, to: f * rand(1.3, 1.9), glide: len, peak: rand(0.05, 0.14), attack: 0.012, decay: len });
+  }
+
+  private stop(): void {
+    for (const src of this.rush) {
+      src.stop();
+      src.disconnect();
+    }
+    this.spray?.stop();
+    this.spray?.disconnect();
+    for (const n of [...this.rushNodes, ...this.sprayNodes, ...Object.values(this.layers), this.send, this.out]) n.disconnect();
+  }
+}
+
 interface SfxDef { fn: SfxFn; wet: number; len: number }
 
 const SFX: Record<Sfx, SfxDef> = {
@@ -724,7 +1280,7 @@ function settingsApi(s: Settings, apply: () => void) {
 function createNoopSound(s: Settings): Sound {
   const api = settingsApi(s, () => {});
   return Object.defineProperties(
-    { unlock() {}, setMood(_m: Mood) {}, play(_x: Sfx) {} },
+    { unlock() {}, setMood(_m: Mood) {}, setWaves(_l: number) {}, setNature(_n: Nature) {}, play(_x: Sfx) {} },
     Object.getOwnPropertyDescriptors(api),
   ) as Sound;
 }
@@ -738,6 +1294,10 @@ export function createSound(): Sound {
   let failed = false;
   let mood: Mood = "silent";
   let player: MoodPlayer | null = null;
+  let wavesLevel = 0;
+  let waves: WavesPlayer | null = null;
+  let natureLevels: Nature = { gulls: 0, birds: 0, insects: 0, brook: 0, fountain: 0 };
+  let nature: NaturePlayer | null = null;
   let timer: ReturnType<typeof setInterval> | null = null;
 
   const applyVolume = () => {
@@ -753,6 +1313,18 @@ export function createSound(): Sound {
     player?.tick();
   };
 
+  const applyWaves = () => {
+    if (!engine) return;
+    if (wavesLevel > 0 && !waves) waves = new WavesPlayer(engine);
+    waves?.setLevel(wavesLevel, () => { waves = null; });
+  };
+
+  const applyNature = () => {
+    if (!engine) return;
+    if (audible(natureLevels) && !nature) nature = new NaturePlayer(engine);
+    nature?.setLevels(natureLevels, () => { nature = null; });
+  };
+
   const api = settingsApi(settings, applyVolume);
   const sound = {
     unlock() {
@@ -760,8 +1332,14 @@ export function createSound(): Sound {
       try {
         if (!engine) {
           engine = buildEngine(Ctor, settings);
-          timer = setInterval(() => player?.tick(), TICK_MS);
+          timer = setInterval(() => {
+            player?.tick();
+            waves?.tick();
+            nature?.tick();
+          }, TICK_MS);
           startMood();
+          applyWaves();
+          applyNature();
         }
         if (engine.ctx.state === "suspended") void engine.ctx.resume().catch(() => {});
       } catch {
@@ -775,6 +1353,21 @@ export function createSound(): Sound {
       if (next === mood) return;
       mood = next;
       try { startMood(); } catch { /* keep playing whatever was there */ }
+    },
+    setWaves(level: number) {
+      const next = clamp01(level);
+      // The world calls this every frame; only a real change, or arriving or leaving, does anything.
+      if (next > 0 === wavesLevel > 0 && Math.abs(next - wavesLevel) < 0.01) return;
+      wavesLevel = next;
+      try { applyWaves(); } catch { /* the walk goes on without the sea */ }
+    },
+    setNature(levels: Nature) {
+      const next = { gulls: clamp01(levels.gulls), birds: clamp01(levels.birds), insects: clamp01(levels.insects), brook: clamp01(levels.brook), fountain: clamp01(levels.fountain) };
+      // Called every frame, like the sea: only a real change, or a sound arriving or leaving, does anything.
+      const same = (Object.keys(next) as (keyof Nature)[]).every((k) => next[k] > 0 === natureLevels[k] > 0 && Math.abs(next[k] - natureLevels[k]) < 0.01);
+      if (same) return;
+      natureLevels = next;
+      try { applyNature(); } catch { /* the walk goes on without them */ }
     },
     play(name: Sfx, opts?: { pitch?: number; volume?: number }) {
       if (!engine || !(name in SFX)) return;

@@ -66,8 +66,8 @@ export const RECIPES: { makes: ItemId; needs: Partial<Record<ItemId, number>> }[
 
 /** Tools you can make yourself, from what lies about in Hazel Wood. Nell and Tobin also hand them over. */
 export const TOOLS: Record<Tool, { name: string; use: string; needs: Partial<Record<ItemId, number>> }> = {
-  rod: { name: "Fishing rod", use: "For the jetties along the river", needs: { driftwood: 2, birch_bark: 1 } },
-  hammer: { name: "Hammer", use: "For stones with colour in them", needs: { driftwood: 2, birch_bark: 1 } },
+  rod: { name: "Fishing rod", use: "For the river jetties and the rocks at the beach", needs: { driftwood: 2, birch_bark: 1 } },
+  hammer: { name: "Hammer", use: "For breaking stones loose", needs: { driftwood: 2, birch_bark: 1 } },
 };
 
 /** What the footbridge takes, and the first lantern for the far bank. */
@@ -152,6 +152,8 @@ export interface BagState {
   nature: ItemId[];
   /** What's on Mara's swap shelf. */
   shelf: ItemId[];
+  /** Things you've done at least once that leave no other mark, for the guide. */
+  tried: ("sell" | "buy" | "swap")[];
 }
 
 export const LANTERN_PAINTS = ["#e9583c", "#f2b54a", "#8fcc76", "#5fb0c6", "#7f86c8", "#c94f6d", "#f4e6c8", "#3f6f8a"];
@@ -173,7 +175,9 @@ function ITEM_IDS_FOUND(): ItemId[] {
 /** Gather this many more things before giving the same person another gift, so gifts stay gifts. */
 export const GIFT_GAP = 5;
 
-export const initialBag = (): BagState => ({ items: {}, coins: 0, found: [], tools: [], gathered: 0, gaveAt: {}, built: [], lanterns: [], nature: [], shelf: ["blackberry", "shell", "quartz", "birch_bark"] });
+export const initialBag = (): BagState => ({ items: {}, coins: 0, found: [], tools: [], gathered: 0, gaveAt: {}, built: [], lanterns: [], nature: [], shelf: ["blackberry", "shell", "quartz", "birch_bark"], tried: [] });
+
+const tried = (b: BagState, what: BagState["tried"][number]): BagState => (b.tried.includes(what) ? b : { ...b, tried: [...b.tried, what] });
 
 export const countOf = (b: BagState, id: ItemId) => b.items[id] ?? 0;
 
@@ -202,7 +206,7 @@ export function craft(b: BagState, makes: ItemId): BagState {
 /** Buy something over a counter. */
 export function buyItem(b: BagState, id: ItemId): BagState {
   const price = counterPrice(id);
-  return b.coins < price ? b : { ...add(b, id, 1), coins: b.coins - price };
+  return b.coins < price ? b : tried({ ...add(b, id, 1), coins: b.coins - price }, "buy");
 }
 
 export function makeTool(b: BagState, tool: Tool): BagState {
@@ -218,7 +222,7 @@ export function spendItems(b: BagState, needs: Partial<Record<ItemId, number>>):
 
 export function sell(b: BagState, id: ItemId, who: Buyer | "stall" = "stall"): BagState {
   if (countOf(b, id) < 1) return b;
-  return { ...take(b, id, 1), coins: b.coins + priceFrom(who, id) };
+  return tried({ ...take(b, id, 1), coins: b.coins + priceFrom(who, id) }, "sell");
 }
 
 /** Pay for a lantern of your own design. */
@@ -238,10 +242,10 @@ export function swapShelf(b: BagState, leave: ItemId, takeId: ItemId): BagState 
   const at = b.shelf.indexOf(takeId);
   if (at < 0 || countOf(b, leave) < 1) return b;
   const after = take(b, leave, 1);
-  return { ...add(after, takeId, 1), shelf: b.shelf.map((x, i) => (i === at ? leave : x)) };
+  return tried({ ...add(after, takeId, 1), shelf: b.shelf.map((x, i) => (i === at ? leave : x)) }, "swap");
 }
 
-export const pay = (b: BagState, price: number): BagState => (b.coins >= price ? { ...b, coins: b.coins - price } : b);
+export const pay = (b: BagState, price: number): BagState => (b.coins >= price ? tried({ ...b, coins: b.coins - price }, "buy") : b);
 
 export const canGift = (b: BagState, who: Friend) => b.gaveAt[who] === undefined || b.gathered - b.gaveAt[who]! >= GIFT_GAP;
 
@@ -255,7 +259,7 @@ export function sellable(b: BagState, who: Buyer | "stall"): ItemId[] {
   return ITEM_IDS.filter((id) => countOf(b, id) > 0 && (who === "stall" || BUYERS[who].includes(ITEMS[id].kind)));
 }
 
-export const BAG_EVENTS = new Set(["tool", "use_items", "woods_goal"]);
+export const BAG_EVENTS = new Set(["tool", "use_items", "woods_goal", "story_goal"]);
 const BUILT = ["bridge", "bridge_lantern"];
 
 /** Story events: `tool rod` hands you something; `use_items bridge` or `use_items lantern` spends what those take. */
@@ -284,5 +288,5 @@ export function fishFor(bank: "near" | "far" | "sea", pull: "nibble" | "pull"): 
 export function normalizeBag(raw: unknown): BagState {
   const r = (raw ?? {}) as Partial<BagState>;
   const d = initialBag();
-  return { ...d, ...r, items: { ...r.items }, found: Array.isArray(r.found) ? r.found.filter(isItem) : [], tools: Array.isArray(r.tools) ? r.tools : [], gaveAt: { ...r.gaveAt }, built: Array.isArray(r.built) ? r.built : [], lanterns: Array.isArray(r.lanterns) ? r.lanterns.filter((l) => LANTERN_PAINTS.includes(l?.colour) && LANTERN_SHAPES.includes(l?.shape)).slice(0, MAX_LANTERNS) : [], nature: Array.isArray(r.nature) ? r.nature.filter(isItem) : [], shelf: Array.isArray(r.shelf) && r.shelf.length ? r.shelf.filter(isItem) : d.shelf };
+  return { ...d, ...r, items: { ...r.items }, found: Array.isArray(r.found) ? r.found.filter(isItem) : [], tools: Array.isArray(r.tools) ? r.tools : [], gaveAt: { ...r.gaveAt }, built: Array.isArray(r.built) ? r.built : [], lanterns: Array.isArray(r.lanterns) ? r.lanterns.filter((l) => LANTERN_PAINTS.includes(l?.colour) && LANTERN_SHAPES.includes(l?.shape)).slice(0, MAX_LANTERNS) : [], nature: Array.isArray(r.nature) ? r.nature.filter(isItem) : [], shelf: Array.isArray(r.shelf) && r.shelf.length ? r.shelf.filter(isItem) : d.shelf, tried: Array.isArray(r.tried) ? r.tried.filter((t) => t === "sell" || t === "buy" || t === "swap") : [] };
 }

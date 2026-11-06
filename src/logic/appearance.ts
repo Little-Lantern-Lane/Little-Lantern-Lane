@@ -16,6 +16,8 @@ export const FUR_COUNT = 3;
 export const OUTFIT_COLOR_COUNT = 6;
 
 export interface CharacterChoice {
+  /** What people call you. Empty until you've chosen. */
+  name: string;
   body: (typeof BODIES)[number];
   animal: (typeof ANIMALS)[number];
   fur: number;
@@ -25,8 +27,15 @@ export interface CharacterChoice {
   extra: (typeof EXTRAS)[number];
 }
 
+/** The name people use if you leave it blank. */
+export const DEFAULT_NAME = "Robin";
+export const MAX_NAME = 16;
+/** A name as typed, tidied: no control characters or stray spaces, and short enough to fit a name tag. */
+export const cleanName = (raw: unknown): string =>
+  (typeof raw === "string" ? raw : "").replace(/[\p{C}{}<>#]/gu, "").replace(/\s+/g, " ").trim().slice(0, MAX_NAME).trim();
+
 /** Close to the red panda the game always had: a marigold tunic and a satchel. */
-export const DEFAULT_CHARACTER: CharacterChoice = { body: "boy", animal: "redpanda", fur: 0, outfit: "tunic", color: 0, hat: "none", extra: "none" };
+export const DEFAULT_CHARACTER: CharacterChoice = { name: "", body: "boy", animal: "redpanda", fur: 0, outfit: "tunic", color: 0, hat: "none", extra: "none" };
 
 /** A starting outfit for each body. Every outfit can still be worn by either. */
 export const STARTING_OUTFIT: Record<CharacterChoice["body"], Pick<CharacterChoice, "outfit" | "hat">> = {
@@ -39,7 +48,7 @@ export const STARTING_OUTFIT: Record<CharacterChoice["body"], Pick<CharacterChoi
 export const HOME_STYLES = ["cottage", "mushroom", "burrow", "tower"] as const;
 export const PAINT_COUNT = 4;
 export const ADDITIONS = ["up", "side", "porch", "garden"] as const;
-/** Extras bought from Tobin with what you've earned. Separate from additions, which never cost anything. */
+/** Extras bought from Tobin with what you've earned. Additions are his too, after the first one, which is free. */
 export const DECOR = ["armchair", "ferns", "lamps", "rug", "keepsakes", "fence", "lights", "cellar"] as const;
 export type Decor = (typeof DECOR)[number];
 export type Addition = (typeof ADDITIONS)[number];
@@ -76,8 +85,10 @@ export interface HomeChoice {
   custom: CustomHome;
   /** What has been added to the home so far. */
   grown: Addition[];
-  /** How many additions the home has room for: one more at each save point. */
+  /** How many additions you have room for: the free one, and any Tobin has built. Once chosen, an addition stays. */
   slots: number;
+  /** Whether you've had the addition that comes free with finishing your first chapter. */
+  gotFree: boolean;
   /** Things you've bought for it. */
   decor: Decor[];
   /** Furniture you've made or bought, and where it stands. */
@@ -89,7 +100,7 @@ export const DEFAULT_CUSTOM: CustomHome = {
   shutters: true, boxes: true, wall: WALL_COLORS[4], roofColor: ROOF_COLORS[6], doorColor: DOOR_COLORS[2], trim: DOOR_COLORS[1],
 };
 
-export const DEFAULT_HOME: HomeChoice = { kind: "style", style: "cottage", paint: 1, custom: DEFAULT_CUSTOM, grown: [], slots: 0, decor: [], furniture: NO_FURNITURE };
+export const DEFAULT_HOME: HomeChoice = { kind: "style", style: "cottage", paint: 1, custom: DEFAULT_CUSTOM, grown: [], slots: 0, gotFree: false, decor: [], furniture: NO_FURNITURE };
 
 /** Which extra rooms the home has. A bedroom comes with the upper floor, a side room with the side addition. */
 export function hasRoom(home: HomeChoice, room: "bedroom" | "sitting" | "cellar"): boolean {
@@ -98,7 +109,7 @@ export function hasRoom(home: HomeChoice, room: "bedroom" | "sitting" | "cellar"
   return home.decor.includes("cellar");
 }
 
-/** Tobin builds an addition for coins: it doesn't use up the room the home gets at save points. */
+/** Tobin builds an addition for coins. */
 export function buildAddition(home: HomeChoice, a: Addition): HomeChoice {
   if (home.grown.includes(a)) return home;
   return { ...home, grown: ADDITIONS.filter((x) => x === a || home.grown.includes(x)), slots: Math.min(ADDITIONS.length, home.slots + 1) };
@@ -115,13 +126,20 @@ export function remainingAdditions(home: HomeChoice): Addition[] {
   return ADDITIONS.filter((a) => !home.grown.includes(a));
 }
 
-/** At a save point the home gets room for one more addition, up to all four. */
+/** The first chapter you finish gives your home one addition for free. Every other one is built for coins. */
+export const freeAdditionDue = (home: HomeChoice): boolean => !home.gotFree && remainingAdditions(home).length > 0;
+
+/** Room for one more addition, up to all four. */
 export function growRoom(home: HomeChoice): HomeChoice {
   return { ...home, slots: Math.min(ADDITIONS.length, home.slots + 1) };
 }
 
-/** Switch an addition on or off, keeping within the room the home has. */
-export function toggleAddition(home: HomeChoice, a: Addition): HomeChoice {
+/**
+ * Switch an addition on or off, keeping within the room the home has. `kept` is what the home
+ * already had: those stay, so a cheap addition can't be swapped for a dearer one.
+ */
+export function toggleAddition(home: HomeChoice, a: Addition, kept: readonly Addition[] = []): HomeChoice {
+  if (kept.includes(a)) return home;
   if (home.grown.includes(a)) return { ...home, grown: home.grown.filter((x) => x !== a) };
   if (home.grown.length >= home.slots) return home;
   return { ...home, grown: ADDITIONS.filter((x) => x === a || home.grown.includes(x)) };
@@ -138,6 +156,7 @@ export function normalizeCharacter(raw: unknown): CharacterChoice {
   const r = (raw ?? {}) as Partial<Record<keyof CharacterChoice, unknown>>;
   const d = DEFAULT_CHARACTER;
   return {
+    name: cleanName(r.name),
     body: oneOf(BODIES, r.body, d.body),
     animal: oneOf(ANIMALS, r.animal, d.animal),
     fur: index(r.fur, FUR_COUNT, d.fur),
@@ -170,6 +189,8 @@ export function normalizeHome(raw: unknown): HomeChoice {
     custom,
     grown,
     slots,
+    // Homes from before additions cost coins have already had theirs.
+    gotFree: typeof r.gotFree === "boolean" ? r.gotFree : slots > 0,
     decor: Array.isArray(r.decor) ? DECOR.filter((d) => (r.decor as unknown[]).includes(d)) : [],
     furniture: normalizeFurnishings(r.furniture),
   };

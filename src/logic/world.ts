@@ -226,8 +226,8 @@ export function applyWorldEvent(w: WorldState, ev: GameEvent): WorldState {
         hasLight: false,
         darkness: 0,
         panic: false,
-        // What you built on the river stays built, except when you play the week you build it in.
-        props: level === 7 ? [] : w.props.filter((p) => LASTING_PROPS.includes(p)),
+        // What you built on the river stays built, even if you play the week you built it in again.
+        props: w.props.filter((p) => LASTING_PROPS.includes(p)),
         placed: {},
         faces: {},
         ...CHAPTER_START[level],

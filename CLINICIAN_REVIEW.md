@@ -92,8 +92,12 @@ before playtesting with real players. Each points to where it lives.
     shame haze); scared shows a sweat drop and a shiver. Do these read as gentle and
     recognizable rather than comic? (`FEELINGS` in `src/ui/plush.ts`)
 
-16. **Safety.** The title screen says the game is not therapy or a crisis resource and points
-   to emergency services and 988 (US). No crisis detection or in-game handling exists.
+16. **Safety.** The note saying the game is not therapy or a crisis resource, with emergency
+   services and 988 (US), was taken off the loading screen on 2026-11-05 at the designer's
+   request, because the game never names DBT. A one-line version, which doesn't name DBT, now
+   sits at the bottom of the Guide panel (`GUIDE_NOTE` in `src/logic/guide.ts`), so players only
+   see it if they open the Guide. Please review whether that's prominent enough. No crisis
+   detection or in-game handling exists.
    DESIGN.md lists crisis handling as an open decision.
 
 17. **Nell's grief and Rosa's lantern.** New backstory: Nell's lost winter came after her young

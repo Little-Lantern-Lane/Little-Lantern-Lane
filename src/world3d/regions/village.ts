@@ -69,6 +69,8 @@ function textSign(p: Parts, text: string, x: number, y: number, z: number, w: nu
 }
 
 /** Keeps the paths out of the village clear of scenery. */
+/** How far a tree stands from a path, so its branches stay clear of it too. */
+const TREE_ROOM = 5.5;
 const nearTrail = (x: number, z: number, room = 3) => [TRAILS.toBeach, TRAILS.toMill, TRAILS.toWoods].some((t) => distToTrail(x * 55, z, t) < room);
 
 /** A post pointing the way somewhere. */
@@ -627,7 +629,7 @@ export function buildVillage(ctx: BuildContext): VillageKit {
   // --- The Hill ---
   const hillTrees: [number, number, number][] = [[62.5, -5.2, 1.2], [68.4, -5.6, 1.35], [79.2, -4.6, 1.15], [65.2, -7.2, 1.25], [71.8, -6.4, 1.15], [59.8, -6, 1]];
   hillTrees.forEach(([x, z, sc], i) => {
-    if (distToTrail(x * 55, z, TRAILS.toMill) > 3) s.tree(x, gyAt(x, z), z, sc, GREENS[i % 4], i);
+    if (!nearTrail(x, z, TREE_ROOM)) s.tree(x, gyAt(x, z), z, sc, GREENS[i % 4], i);
   });
   stoneWall(s, r, 59.4, 71.6, -4.4, 2);
   for (const [x, z, sz] of [[60.8, -3.9, 0.5], [66.9, -4, 0.42], [72.2, -3.95, 0.58], [73.1, -4.2, 0.4]]) if (!nearTrail(x, z, 3)) s.put("boulder", x, gyAt(x, z) + sz * 0.5, z, sz * 1.2, sz, sz, "#c8bdca");
@@ -711,7 +713,7 @@ export function buildVillage(ctx: BuildContext): VillageKit {
   // Trees fill everything behind the buildings; none on top of a house.
   const clear = (x: number, z: number) => !houses.some(([hx, hz, w]) => Math.abs(x - hx) < w / 2 + 1.8 && z < hz + 2 && z > hz - 6);
   for (const [x, z, sc] of [[-0.4, -6.4, 1.1], [57.9, -7.8, 1.1], [3, -8.8, 1.3], [7.2, -9, 1.2], [11, -10.2, 1.3], [20.6, -10, 1.3], [33.3, -8.8, 1.2], [37.2, -11, 1.3], [44.2, -12.2, 1.35], [49.3, -11.8, 1.3], [53, -13, 1.3]]) {
-    s.tree(x, gyAt(x, z), z, sc, GREENS[Math.floor(r() * 4)], r() * 6);
+    if (!nearTrail(x, z, TREE_ROOM)) s.tree(x, gyAt(x, z), z, sc, GREENS[Math.floor(r() * 4)], r() * 6);
   }
   for (let i = 0; i < 150; i++) {
     const x = -34 + r() * 150;
@@ -719,13 +721,13 @@ export function buildVillage(ctx: BuildContext): VillageKit {
     if (x > -2 && x < 58 && z > -12.5) continue;
     if (x >= 58 && x < 75 && z > -8 + (x > 70 ? 2 : 0)) continue;
     if (x > 70 && x < 83 && z > -13) continue;
-    if (!clear(x, z)) continue;
+    if (!clear(x, z) || nearTrail(x, z, TREE_ROOM)) continue;
     s.tree(x, gyAt(x, z), z, 1 + r() * 0.75, GREENS[Math.floor(r() * 4)], r() * 6, true);
   }
   // Hedge along the backs of the shops.
   for (let x = 3; x < 36; x += 1.5) {
     const z = -11 + Math.sin(x) * 0.3;
-    if (!clear(x, z)) continue;
+    if (!clear(x, z) || nearTrail(x, z)) continue;
     s.blob(x, 0.55, z, 0.8, GREENS[(x | 0) % 3]);
   }
 
@@ -810,7 +812,21 @@ export function buildVillage(ctx: BuildContext): VillageKit {
   const px = X(PROPS.plough.x);
   plough(ploughParts.sub(px, 0, -1.4, Math.PI));
   const ploughBlock: Blocker[] = [{ X: px - 1.7, Z: -1.4, r: 1.35 }, { X: px, Z: -1.4, r: 1.35 }, { X: px + 1.4, Z: -1.4, r: 1.3 }];
+  // The bread you carried over, set down where the whole Square can see it.
+  const breadParts = new Parts();
+  const trayX = X(PROPS.bread_trays.x);
+  const trayZ = -1.6;
+  const crust = ["#c98a4a", "#b97a3e", "#d39a58"];
+  for (const dx of [-0.85, 0.85]) {
+    const tray = breadParts.sub(trayX + dx, 0, trayZ);
+    for (const lx of [-0.55, 0.55]) tray.add(pbox(0.14, 0.62, 0.8, 0.03, soft("#8a5f3e"), lx, 0.31, 0));
+    tray.add(pbox(1.5, 0.1, 1.02, 0.03, soft("#b9895e"), 0, 0.67, 0));
+    for (const [ex, ez, ew, ed] of [[0, -0.48, 1.5, 0.07], [0, 0.48, 1.5, 0.07], [-0.72, 0, 0.07, 1.02], [0.72, 0, 0.07, 1.02]] as const) tray.add(pbox(ew, 0.14, ed, 0.02, soft("#a8784e"), ex, 0.77, ez));
+    for (let i = 0; i < 6; i++) tray.add(dome(0.2, 0.17, 0.3, soft(crust[i % 3]), -0.44 + (i % 3) * 0.44, 0.73, i < 3 ? -0.22 : 0.22));
+  }
+  const breadBlock: Blocker[] = [-0.85, 0.85].map((dx) => ({ X: trayX + dx, Z: trayZ, r: 0.85 }));
   const props: { name: string; g: THREE.Group }[] = [
+    { name: "bread_trays", g: bake(breadParts.base) },
     { name: "street_bunting", g: bake(buntingParts.base) },
     { name: "nell_snow", g: bake(nellSnow.base) },
     { name: "plough", g: bake(ploughParts.base) },
@@ -872,6 +888,8 @@ export function buildVillage(ctx: BuildContext): VillageKit {
   textSign(hubParts.sub(5.45, 0, -3.72), "NELL'S SEWING", 0, 2.7, 0, 2.3, 0.4);
   // Ash is at the tea room now, and says so.
   textSign(hubParts.sub(X(1880), 0, VILLAGE_Z.teaCart + 0.75), "AT THE MILL", 0, 0.95, 0, 1.5, 0.32);
+  // You walk round these, but only when they're out: the village between stories.
+  const hubBlocks = [USABLES.swap_shelf, USABLES.nature_table].flatMap((u) => [-0.8, 0.8].map((d) => ({ X: X(u.x) + d, Z: u.z! - 0.9, r: 0.7 })));
   const hubScene = bake(hubParts.base);
   group.add(hubScene);
 
@@ -966,6 +984,12 @@ export function buildVillage(ctx: BuildContext): VillageKit {
       for (const pr of props) pr.g.visible = (PROPS[pr.name].shown?.(w) ?? false) || w.props.includes(pr.name);
       const ploughOut = w.props.includes("plough");
       hubScene.visible = w.level === 8;
+      const breadOut = blockers.includes(breadBlock[0]);
+      if (w.props.includes("bread_trays") && !breadOut) blockers.push(...breadBlock);
+      if (!w.props.includes("bread_trays") && breadOut) for (const b of breadBlock) blockers.splice(blockers.indexOf(b), 1);
+      const hubOut = blockers.includes(hubBlocks[0]);
+      if (hubScene.visible && !hubOut) blockers.push(...hubBlocks);
+      if (!hubScene.visible && hubOut) for (const b of hubBlocks) blockers.splice(blockers.indexOf(b), 1);
       const has = blockers.includes(ploughBlock[0]);
       if (ploughOut && !has) blockers.push(...ploughBlock);
       if (!ploughOut && has) for (const b of ploughBlock) blockers.splice(blockers.indexOf(b), 1);

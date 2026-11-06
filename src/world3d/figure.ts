@@ -8,7 +8,7 @@ import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeom
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { CharacterId, Expression } from "../logic/cast";
 import { FACES, FEELINGS, LOOKS, lookMarkup, S, SPECIES, type Frame, type Look, type Species } from "../ui/plush";
-import { motionPose } from "./motion";
+import { motionPose, settledMotion } from "./motion";
 import type { Figure } from "./types";
 
 const U = 1 / 40;
@@ -825,6 +825,8 @@ export function makeFigure(id: CharacterId, start: Expression): Figure {
   let blinkAt = 1 + Math.random() * 4;
   let blinkUntil = 0;
   let talking = false;
+  let freshFeeling = true;
+  let livelyAt = 0;
   let shownFace: THREE.Texture | null = null;
 
   let speed = 0;
@@ -866,6 +868,7 @@ export function makeFigure(id: CharacterId, start: Expression): Figure {
   return {
     root,
     setFeeling(e) {
+      if (e !== expr) freshFeeling = true;
       expr = e;
       prepare(e);
     },
@@ -898,6 +901,10 @@ export function makeFigure(id: CharacterId, start: Expression): Figure {
     },
     update(dt, t) {
       showFace(t);
+      if (freshFeeling || talking) {
+        livelyAt = t;
+        freshFeeling = false;
+      }
 
       let d = wantYaw - yaw;
       d = Math.atan2(Math.sin(d), Math.cos(d));
@@ -923,7 +930,7 @@ export function makeFigure(id: CharacterId, start: Expression): Figure {
       head.rotation.x = slump * 2.5;
 
       const calm = reducedMotion();
-      const p = calm ? null : walking ? { dy: Math.abs(Math.sin(walkT)) * 0.07 * stride, angle: Math.sin(walkT) * 0.05 * stride, sx: 1, sy: 1 } : motionPose(FEELINGS[expr].motion, t);
+      const p = calm ? null : walking ? { dy: Math.abs(Math.sin(walkT)) * 0.07 * stride, angle: Math.sin(walkT) * 0.05 * stride, sx: 1, sy: 1 } : motionPose(settledMotion(FEELINGS[expr].motion, t - livelyAt), t);
       pivot.position.y = p?.dy ?? 0;
       pivot.rotation.z = p?.angle ?? 0;
       const sx = (p?.sx ?? 1) * (1 + slump * 0.35);

@@ -9,6 +9,11 @@ export interface Pose {
   sy: number;
 }
 
+/** Big movements are for the moment a feeling lands, or while someone's talking. After that the body settles. */
+const LIVELY: readonly Motion[] = ["bounce", "hop", "laugh", "stomp"];
+export const LIVELY_SECONDS = 2.4;
+export const settledMotion = (m: Motion, quietFor: number): Motion => (quietFor > LIVELY_SECONDS && LIVELY.includes(m) ? "breathe" : m);
+
 export function motionPose(m: Motion, t: number): Pose {
   const p: Pose = { dy: 0, angle: 0, sx: 1, sy: 1 };
   switch (m) {

@@ -23,7 +23,7 @@ export interface DialogueBox {
 /** Called as a speaker's mouth opens and closes with their words. */
 export type MouthHandler = (speaker: CharacterId, open: boolean) => void;
 
-export function createDialogueBox(root: HTMLElement, sound: Sound, reducedMotion: boolean, onMouth: MouthHandler = () => {}): DialogueBox {
+export function createDialogueBox(root: HTMLElement, sound: Sound, reducedMotion: boolean, onMouth: MouthHandler = () => {}, youName: () => string = () => "You"): DialogueBox {
   root.innerHTML = `<div class="dlg-portrait"></div><div class="dlg-body"><span class="dlg-name"></span><p class="dlg-text"></p><div class="dlg-choices"></div><span class="dlg-next" aria-hidden="true">▼</span></div>`;
   const portrait = root.querySelector<HTMLElement>(".dlg-portrait")!;
   const name = root.querySelector<HTMLElement>(".dlg-name")!;
@@ -70,7 +70,7 @@ export function createDialogueBox(root: HTMLElement, sound: Sound, reducedMotion
       if (spoken) {
         // Trusted markup from our own renderer (no story or user text inside).
         portrait.innerHTML = portraitSVG(spoken.speaker, spoken.expression ?? "neutral");
-        name.textContent = CAST[spoken.speaker].name;
+        name.textContent = spoken.speaker === "you" ? youName() : CAST[spoken.speaker].name;
         root.classList.toggle("is-you", spoken.speaker === "you");
       } else {
         name.textContent = "";

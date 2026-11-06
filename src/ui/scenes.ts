@@ -158,16 +158,16 @@ export function runBreathScene(panel: HTMLElement, sound: Sound, onBreath: () =>
     const svg = document.createElementNS(NS, "svg");
     svg.setAttribute("viewBox", "0 0 200 200");
     svg.classList.add("breath-art");
-    const ring = document.createElementNS(NS, "circle");
-    ring.setAttribute("cx", "100");
-    ring.setAttribute("cy", "100");
-    ring.setAttribute("r", "90");
-    ring.setAttribute("class", "breath-ring");
+    // A soft halo instead of a filter or a ring: nothing with an edge to catch the eye between breaths.
+    const halo = document.createElementNS(NS, "circle");
+    halo.setAttribute("cx", "100");
+    halo.setAttribute("cy", "100");
+    halo.setAttribute("class", "breath-halo");
     const orb = document.createElementNS(NS, "circle");
     orb.setAttribute("cx", "100");
     orb.setAttribute("cy", "100");
     orb.setAttribute("class", "breath-orb");
-    svg.append(ring, orb);
+    svg.append(halo, orb);
 
     const cue = h("p", { class: "breath-cue", text: "Press and hold to breathe in." });
     const note = h("p", { class: "breath-note" });
@@ -181,7 +181,7 @@ export function runBreathScene(panel: HTMLElement, sound: Sound, onBreath: () =>
     let done = false;
 
     const NOTES: Record<NonNullable<BreathNote>, string> = {
-      in_short: "That breath in was quick. Try holding a little longer, until the circle fills.",
+      in_short: "That breath in was quick. Try holding a little longer, until the circle is big.",
       out_short: "That breath out was quick. Let it go slower, until the circle is small again.",
     };
 
@@ -205,7 +205,9 @@ export function runBreathScene(panel: HTMLElement, sound: Sound, onBreath: () =>
       }
       const dt = t - state.since;
       const full = fullness(state, t);
-      orb.setAttribute("r", String(reducedMotion ? (state.phase === "in" ? 88 : 20) : 20 + full * 68));
+      const size = reducedMotion ? (state.phase === "in" ? 88 : 20) : 20 + full * 68;
+      orb.setAttribute("r", String(size));
+      halo.setAttribute("r", String(size + 10));
       if (state.phase === "idle") cue.textContent = "Press and hold to breathe in.";
       if (state.phase === "in") cue.textContent = dt < IN_MIN ? "In through your nose..." : "Now let go, and breathe out slowly.";
       if (state.phase === "out") {
@@ -255,7 +257,7 @@ export function runBreathScene(panel: HTMLElement, sound: Sound, onBreath: () =>
     openPanel(
       panel,
       h("h2", { text: "Slow your breathing" }),
-      h("p", { class: "hint", text: "Hold Space (or the button) to breathe in until the circle fills. Let go and breathe out slowly while it shrinks. Each slow breath counts once the circle is small again." }),
+      h("p", { class: "hint", text: "Hold Space (or the button) to breathe in until the circle is big. Let go and breathe out slowly while it shrinks. Each slow breath counts once the circle is small again." }),
       svg,
       cue,
       note,
@@ -299,7 +301,7 @@ export function runSaveScene(panel: HTMLElement, finished: string, next: string,
 
 // --- Mending -------------------------------------------------------------------
 
-/** Patch the torn lantern (borrowed-lantern story) or bend the dented ones back. */
+/** Patch the torn lantern (borrowed-lantern story) or bend the dented one back. */
 export function runMendScene(panel: HTMLElement, variant: Variant, sound: Sound): Promise<void> {
   const NS = "http://www.w3.org/2000/svg";
   const svgEl = (tag: string, attrs: Record<string, string | number>, parent: Element) => {
@@ -357,12 +359,15 @@ export function runMendScene(panel: HTMLElement, variant: Variant, sound: Sound)
       openPanel(panel, h("h2", { text: "Patch the tear" }), h("p", { class: "hint", text: "Lay a strip of gold paper over each part of the tear." }), svg, status);
       finishIfDone(tear.length - 1);
     } else {
-      [80, 220].forEach((cx, i) => {
-        const g = lantern(cx, i ? "#f2b54a" : "#e9583c", 50);
+      {
+        const g = lantern(150, "#d9473f", 50);
+        const dent = svgEl("g", { class: "dent-mark" }, g);
+        svgEl("path", { d: "M176 58 Q146 104 178 154 Q198 106 176 58Z", fill: "#7a2416" }, dent);
+        svgEl("path", { d: "M171 82 L147 92 M170 126 L146 118 M167 104 L141 105", stroke: "#7a2416", "stroke-width": 3, "stroke-linecap": "round", fill: "none" }, dent);
         g.classList.add("dented");
         g.setAttribute("tabindex", "0");
         g.setAttribute("role", "button");
-        g.setAttribute("aria-label", `Bend lantern ${i + 1} back into shape (press and hold)`);
+        g.setAttribute("aria-label", "Bend the lantern back into shape (press and hold)");
         let held: number | undefined;
         let progress = 0;
         const start = () => {
@@ -370,13 +375,15 @@ export function runMendScene(panel: HTMLElement, variant: Variant, sound: Sound)
           held = window.setInterval(() => {
             progress += 0.05;
             g.querySelector(".paper")!.setAttribute("rx", String(50 + 20 * Math.min(1, progress)));
+            // Good as new. Nearly: a trace of the dent stays.
+            dent.setAttribute("opacity", String(1 - 0.8 * Math.min(1, progress)));
             if (progress >= 1) {
               window.clearInterval(held);
               held = undefined;
               g.classList.add("fixed");
-              sound.play("pickup", { pitch: 1 + i * 0.2 });
+              sound.play("pickup");
               done++;
-              finishIfDone(2);
+              finishIfDone(1);
             }
           }, 40);
         };
@@ -389,9 +396,9 @@ export function runMendScene(panel: HTMLElement, variant: Variant, sound: Sound)
         g.addEventListener("pointerleave", stop);
         g.addEventListener("keydown", (e) => ((e as KeyboardEvent).key === "Enter" || (e as KeyboardEvent).key === " ") && start());
         g.addEventListener("keyup", stop);
-      });
-      openPanel(panel, h("h2", { text: "Bend them back" }), h("p", { class: "hint", text: "Press and hold each dented lantern until it's round again." }), svg, status);
-      finishIfDone(2);
+      }
+      openPanel(panel, h("h2", { text: "Bend it back" }), h("p", { class: "hint", text: "Press and hold the dented lantern until it's round again." }), svg, status);
+      finishIfDone(1);
     }
   });
 }

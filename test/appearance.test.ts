@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ADDITIONS, ANIMALS, CUSTOM_PARTS, DEFAULT_CHARACTER, DEFAULT_HOME, EXTRAS, HATS, HOME_STYLES, OUTFITS,
-  growRoom, normalizeCharacter, normalizeHome, remainingAdditions, toggleAddition, type HomeChoice,
+  buildAddition, freeAdditionDue, growRoom, normalizeCharacter, normalizeHome, remainingAdditions, toggleAddition, type HomeChoice,
 } from "../src/logic/appearance";
 import { EXPRESSIONS } from "../src/logic/cast";
 import { characterMarkup } from "../src/ui/plush";
@@ -96,6 +96,21 @@ describe("your home", () => {
     expect(toggleAddition(home, "porch").grown).not.toContain("porch");
   });
 
+  it("an addition you already had stays, so a cheap one can't be swapped for a dearer one", () => {
+    const bought = buildAddition(DEFAULT_HOME, "porch");
+    const kept = bought.grown;
+    expect(toggleAddition(bought, "porch", kept)).toBe(bought);
+    expect(toggleAddition(bought, "up", kept).grown).toEqual(["porch"]);
+  });
+
+  it("the free addition can still be chosen later, and changed until you're done", () => {
+    const decidedLater = growRoom(DEFAULT_HOME);
+    const kept = decidedLater.grown;
+    const picked = toggleAddition(decidedLater, "garden", kept);
+    expect(picked.grown).toEqual(["garden"]);
+    expect(toggleAddition(picked, "garden", kept).grown).toEqual([]);
+  });
+
   it("a saved home is checked: unknown parts, colors and extra additions are dropped", () => {
     const home = normalizeHome({ kind: "custom", style: "castle", slots: 1, grown: ["porch", "garden", "moat"], custom: { roof: "steep", wall: "#000000", door: "hatch" } });
     expect(home.kind).toBe("custom");
@@ -130,5 +145,21 @@ describe("saving your look", () => {
     const store = memory();
     store.setItem("lantern-night:looks", "{not json");
     expect(readLooks(store)).toBeNull();
+  });
+});
+
+describe("what additions cost", () => {
+  it("gives one free addition for a first finished chapter, and only one", () => {
+    expect(freeAdditionDue(DEFAULT_HOME)).toBe(true);
+    expect(freeAdditionDue({ ...DEFAULT_HOME, gotFree: true })).toBe(false);
+  });
+
+  it("still gives the free one if you bought something from Tobin first", () => {
+    expect(freeAdditionDue(buildAddition(DEFAULT_HOME, "porch"))).toBe(true);
+  });
+
+  it("treats a home from an older save as having had its free one", () => {
+    expect(normalizeHome({ slots: 2, grown: ["up", "side"] }).gotFree).toBe(true);
+    expect(normalizeHome({}).gotFree).toBe(false);
   });
 });

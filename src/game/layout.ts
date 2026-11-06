@@ -1,6 +1,7 @@
 // The village as data: areas, ground height, places you can walk into, things
 // you can use, and where everyone stands. No Phaser here, so it can be tested.
 
+import type { Nature } from "../audio/sound";
 import type { ItemId, Tool } from "../logic/bag";
 import type { CharacterId } from "../logic/cast";
 import type { WorldState } from "../logic/world";
@@ -140,7 +141,7 @@ export const LANTERN_ROW: { id: string; name: string; plate: string; knot?: stri
 export const USABLES: Record<string, { x: number; label: string; z?: number }> = {
   // The village where every game starts.
   swap_shelf: { x: 2230, z: 3.2, label: "the swap shelf" },
-  nature_table: { x: 2900, z: 3.2, label: "the nature table" },
+  nature_table: { x: 2570, z: 3.2, label: "the nature table" },
   mirror: { x: 7300, z: -2.3, label: "the mirror" },
   paint_pots: { x: 860, z: -2.2, label: "the paint pots" },
   lantern_table: { x: 5530, label: "the lanterns" },
@@ -203,7 +204,7 @@ const HALF_PATH = 1.5;
 export const TRAILS = {
   toBeach: [[2760, 2.2], [2930, 3], [3040, 5.4], [3090, 8.5], [3120, 13], [3105, 19]],
   toMill: [[3210, 0.2], [3300, -1.4], [3350, -5], [3400, -9], [3440, -14], [3430, -20]],
-  toWoods: [[520, 1.2], [300, 0.4], [130, -1.4], [110, -3.2], [110, -8]],
+  toWoods: [[520, 1.2], [300, 0.4], [130, -1.4], [110, -3.2], [65, -6], [50, -9]],
   woodsExit: [[14900, 0.3], [14560, 0], [14300, -0.6], [14290, -2.6], [14290, -6]],
   beachExit: [[25150, 7], [24800, 8], [24660, 13], [24670, 20], [24640, 28]],
   shore: [[27500, 7], [27900, 9], [28080, 14], [28060, 21], [28080, 28]],
@@ -443,7 +444,7 @@ export const NPC_SPOTS: Record<Phase, Spots> = {
   coast_dusk: { fen: 11860, tobin: 11960, hesketh: 12240 },
   // The week after the storm: Mara and Nell at the river, the kids in the wood, everyone else at work.
   // The village between stories: everyone at their own place, ready to trade.
-  hub: { fen: 11500, nell: 30320, wren: 29220, oda: 29340, tobin: 5580, ash: 9640, mara: 2300, pip: 2850, juno: 2960 },
+  hub: { fen: 11500, nell: 30320, wren: 29220, oda: 29340, tobin: 5580, ash: 9640, mara: 2300, pip: 2450, juno: 2650 },
   woods: { mara: 16700, nell: 16880, pip: 15000, juno: 15060, ash: 1880, wren: 1130, oda: 1195, tobin: 1760 },
 };
 
@@ -469,6 +470,8 @@ export const PLAYER_SPOTS: Record<WorldState["location"], number> = {
 export const PROPS: Record<string, { x: number; y: number; center?: boolean; glow?: number; depth?: number; shown?: (w: WorldState) => boolean }> = {
   // Market Street's bunting: up until you take it down in chapter two; gone by winter.
   street_bunting: { x: 1385, y: GROUND_Y, shown: (w) => !w.props.includes("bunting_down") && w.weather !== "snow" && w.level <= 2, depth: -9 },
+  // Chapter two: the trays you carried, on trestles by the fountain.
+  bread_trays: { x: 2360, y: GROUND_Y },
   // Chapter four
   sign_down: { x: 8880, y: GROUND_Y },
   sign_up: { x: 8950, y: GROUND_Y - 215, center: true },
@@ -500,6 +503,62 @@ export const SHED_ITEMS = [
 ] as const;
 /** The shed floor, where the tide comes in. */
 export const SHED = { x0: 12900, x1: 13700 };
+
+/**
+ * How much of the sea you can hear from here, 0 to 1. On the beach it's strongest at the water's
+ * edge and fades up towards the dunes. It's steady along the harbour and muffled inside the shed,
+ * until the tide (0 to 1, chapter six) brings it right in.
+ */
+export function wavesAt(x: number, z: number, tide = 0): number {
+  const id = regionAt(x).id;
+  if (id === "beach") {
+    const up = Math.min(1, Math.max(0, (z - BEACH.water) / (BEACH.back - BEACH.water)));
+    return 1 - 0.65 * up;
+  }
+  if (id !== "coast") return 0;
+  return Math.max(x >= SHED.x0 ? 0.3 : 0.55, 0.3 + 0.7 * tide);
+}
+
+/** How far from the fountain, in world units, you can hear it, and where it stands on the Square. */
+const FOUNTAIN_REACH = 11;
+const FOUNTAIN_Z = -4.1;
+
+/** How far from the river's edge, in game units, you can still hear it in the woods. */
+const BROOK_REACH = 1200;
+/** Along the mill path the river is behind the bank: never right beside you, but always there. */
+const MILL_BROOK = 0.55;
+
+/**
+ * How much of the gulls, birds, insects, river and fountain you hear here, each 0 to 1. Gulls fill the beach and the
+ * harbour, and birds and insects the woods, but only when `lively` says it's a calm day: not at night, in bad
+ * weather or in the hardest moments. Water doesn't stop for any of that, so the river always runs,
+ * and the fountain does too unless it's `frozen`.
+ */
+export function natureAt(x: number, z: number, lively: boolean, frozen = false): Nature {
+  const id = regionAt(x).id;
+  let gulls = 0;
+  let birds = 0;
+  let insects = 0;
+  let brook = 0;
+  let fountain = 0;
+  if (id === "village" && !frozen) {
+    const away = Math.hypot((x - FOUNTAIN_X) / 55, z - FOUNTAIN_Z);
+    fountain = Math.pow(Math.max(0, 1 - away / FOUNTAIN_REACH), 2);
+  } else if (id === "beach") {
+    const up = Math.min(1, Math.max(0, (z - BEACH.water) / (BEACH.back - BEACH.water)));
+    gulls = 1 - 0.3 * up;
+  } else if (id === "coast") {
+    gulls = x >= SHED.x0 ? 0 : 0.8;
+  } else if (id === "woods") {
+    birds = 1;
+    insects = 1;
+    const fromBank = Math.max(0, Math.abs(x - riverMidX(z)) - RIVER_HALF);
+    brook = Math.pow(Math.max(0, 1 - fromBank / BROOK_REACH), 2);
+  } else if (areaAt(x).id === "millpath") {
+    brook = MILL_BROOK;
+  }
+  return lively ? { gulls, birds, insects, brook, fountain } : { gulls: 0, birds: 0, insects: 0, brook, fountain };
+}
 
 /** The lane is too dark to walk into without a light after hiding. */
 export function laneBlocked(w: WorldState): boolean {

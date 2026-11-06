@@ -1,7 +1,7 @@
 // The panels for what you've gathered: your bag and log, selling, giving, making and buying.
 // None of them score anything: prices are just prices, and a gift has no wrong answer.
 
-import { LANTERN_PAINTS, LANTERN_PRICE, LANTERN_SHAPES, MAX_LANTERNS, NATURE_ITEMS, priceFrom, type MyLantern, BUYERS, canAfford, CLOTHES, counterPrice, COUNTER, countOf, DECOR_SHOP, giftFit, ITEM_IDS, ITEMS, RECIPES, sellable, TOOLS, type BagState, type Buyer, type Friend, type ItemId, type Tool } from "../logic/bag";
+import { LANTERN_PAINTS, LANTERN_PRICE, LANTERN_SHAPES, MAX_LANTERNS, NATURE_ITEMS, priceFrom, type MyLantern, canAfford, CLOTHES, counterPrice, COUNTER, countOf, DECOR_SHOP, giftFit, ITEM_IDS, ITEMS, RECIPES, sellable, TOOLS, type BagState, type Buyer, type Friend, type ItemId, type Tool } from "../logic/bag";
 import { FURNITURE, FURNITURE_IDS, type Furnishings, type FurnitureId, type RoomId } from "../logic/furniture";
 import { COIN, itemIcon } from "./items";
 
@@ -58,8 +58,17 @@ function tile(id: ItemId, count: number | null, sub: string, run?: () => void, o
 
 const NAMES: Record<Friend | "fen", string> = { fen: "Fen", ash: "Ash", wren: "Wren", tobin: "Tobin", nell: "Nell", mara: "Mara", oda: "Oda", pip: "Pip", juno: "Juno" };
 
+/** What each buyer takes, in words. */
+const WANTS: Record<Buyer, string> = {
+  ash: "mushrooms, sea plants and anything you've made",
+  wren: "fruit and anything you've made",
+  tobin: "stones, shells and anything you've made",
+  nell: "fish and anything you've made",
+  fen: "fish",
+};
+
 /** Your bag, your tools, and a log of everything there is to find. */
-export function runBagScreen(panel: HTMLElement, getBag: () => BagState, onTool: (tool: Tool) => void, onChange: () => void): Promise<void> {
+export function runBagScreen(panel: HTMLElement, getBag: () => BagState, onTool: (tool: Tool) => void, onChange: () => void, touch = false): Promise<void> {
   return new Promise((resolve) => {
     const done = () => {
       close(panel);
@@ -102,7 +111,7 @@ export function runBagScreen(panel: HTMLElement, getBag: () => BagState, onTool:
       open(
         panel,
         head("Your bag", have.length ? "What you're carrying" : "Nothing in it yet", bag),
-        ...(have.length ? [grid] : [el("p", "hint", "Walk up to anything growing or lying about and press E. Fruit, mushrooms, driftwood and bark are free for the taking.")]),
+        ...(have.length ? [grid] : [el("p", "hint", `Walk up to anything growing or lying about and ${touch ? "tap the button" : "press E"}. Fruit, mushrooms, driftwood and bark are free for the taking.`)]),
         el("p", "eyebrow", "Tools"),
         tools,
         el("p", "eyebrow", `Found so far: ${bag.found.length} of ${ITEM_IDS.length}`),
@@ -125,12 +134,11 @@ export function runSellScene(panel: HTMLElement, who: Buyer | "stall", bag: () =
         onSell(id);
         draw();
       })));
-      const wants = who === "stall" ? "" : BUYERS[who].filter((k) => k !== "made").join(" and ");
       const name = who === "stall" ? "the stall" : NAMES[who];
       open(
         panel,
         head(`Selling to ${name}`, list.length ? "Pick what to sell" : who === "stall" ? "Nothing to sell yet" : "Nothing they're after", b),
-        ...(list.length ? [grid] : [el("p", "hint", who === "stall" ? "Anything you gather or make can be left here, and the coins are in the tin." : `${name} buys ${wants === "fish" ? "fish" : wants === "fruit" ? "fruit" : wants === "mineral" ? "stones" : "mushrooms"}, and anything you've made.`)]),
+        ...(list.length ? [grid] : [el("p", "hint", who === "stall" ? "Anything you gather or make can be left here, and the coins are in the tin." : `${name} buys ${WANTS[who]}.`)]),
         btn("That's all", "primary", () => {
           close(panel);
           resolve();
@@ -386,8 +394,10 @@ export function runCraftScene(panel: HTMLElement, bag: () => BagState, onMake: (
 
 /** Tobin builds these: the house grows outside as well as in. */
 const ROOM_ROWS: ShopRow[] = [
-  { id: "room_up", name: "An upstairs bedroom", note: "Stairs, and a new floor on the house", price: 120 },
-  { id: "room_side", name: "A side room", note: "A new room on the side of the house", price: 140 },
+  { id: "room_porch", name: "A front porch", note: "Somewhere to sit and watch the lane", price: 100 },
+  { id: "room_garden", name: "A garden", note: "A small plot beside the house", price: 120 },
+  { id: "room_up", name: "An upstairs bedroom", note: "Stairs, and a new floor on the house", price: 180 },
+  { id: "room_side", name: "A side room", note: "A new room on the side of the house", price: 200 },
 ];
 
 const SHOP_NAMES: Record<string, [string, string]> = {

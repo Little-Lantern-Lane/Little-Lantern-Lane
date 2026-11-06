@@ -13,10 +13,10 @@ import type { Sound } from "../audio/sound";
 import { pickBark } from "../game/barks";
 import {
   AREAS, areaAt, MAP_BOARDS, onTrail, PATH_REACH, TRAILS, WALK_SIGNS, BEACH_NODES, BEACH_SPOTS, DOORS, FISHING_SPOTS, FOUNTAIN_X, GROUND_Y, HOOKS, INTERACT_RANGE, laneBlocked, NPC_SPOTS, phaseOf,
-  NODES, PLAYER_SPOTS, POLES, PROPS, regionAt, REGIONS, SHED_ITEMS, USABLES, VIEW_H, WORLD_W, WOODS, woodsAreaAt, woodsLimit, ZONES, type Area, type GatherNode, type Region,
+  natureAt, NODES, PLAYER_SPOTS, POLES, PROPS, regionAt, REGIONS, SHED_ITEMS, USABLES, VIEW_H, wavesAt, WORLD_W, WOODS, woodsAreaAt, woodsLimit, ZONES, type Area, type GatherNode, type Region,
 } from "../game/layout";
 import { makeFigure } from "./figure";
-import { ball, cyl, glowing, lantern, LANTERN_COLOURS, own, soft } from "./kit";
+import { ball, cyl, dented, glowing, lantern, LANTERN_COLOURS, own, soft } from "./kit";
 import { sight } from "./kit";
 import { buildBeach, type BeachKit } from "./regions/beach";
 import { buildCoast } from "./regions/coast";
@@ -240,6 +240,8 @@ export class World3D {
   private people = new Map<Npc, Person>();
 
   // Lanterns on the string in the Square
+  /** The red lantern that rolled round the fountain, and the dent it got. */
+  private redPaper: { mesh: THREE.Mesh; round: THREE.BufferGeometry; dent: THREE.BufferGeometry } | null = null;
   private hookLanterns: { g: THREE.Group; mat: THREE.MeshStandardMaterial; tied: boolean; shown: boolean; pop: number; lit: number }[] = [];
   private hookMarkers: THREE.Mesh[] = [];
   private hookSpots: LightSpot[] = [];
@@ -276,6 +278,8 @@ export class World3D {
   private approaching = false;
   private hanging = false;
   private tiding = false;
+  /** How far in the tide has come, 0 to 1, while chapter six's challenge runs. */
+  private tideIn = 0;
   private headUpButton = false;
   private area: Area = AREAS[0];
   private region: Region = REGIONS[0];
@@ -285,7 +289,6 @@ export class World3D {
   private feelTarget = 0;
   private lastBark = -99999;
   private unlockedAt = 0;
-  private gust = 0;
   private shake = 0;
   private time = 0;
   private lastFrame = performance.now();
@@ -478,6 +481,8 @@ export class World3D {
       else if (my?.shape === "wide") l.g.scale.set(base * 1.3, base * 0.8, base * 1.3);
       else l.g.scale.setScalar(base);
     });
+    // It's the red one that's dented: not one you made, and not Mara's grandmother's.
+    if (this.redPaper) this.redPaper.mesh.geometry = !mine[BRIGHTEST] && w.heirloom === "whole" ? this.redPaper.dent : this.redPaper.round;
   }
 
   /** Go straight to a place, from the map. */
@@ -515,7 +520,11 @@ export class World3D {
       const g = lantern(mat);
       const y = (GROUND_Y - h.y) / SCALE;
       g.position.set(...at(h.x, STRING_Z, y));
-      if (i === BRIGHTEST) g.scale.setScalar(1.25);
+      if (i === BRIGHTEST) {
+        g.scale.setScalar(1.25);
+        const mesh = g.children[1] as THREE.Mesh;
+        this.redPaper = { mesh, round: mesh.geometry, dent: dented(new THREE.SphereGeometry(0.3, 48, 36)) };
+      }
       g.visible = false;
       this.kits.village.group.add(g);
       this.hookLanterns.push({ g, mat, tied: false, shown: false, pop: 1, lit: 0 });
@@ -892,7 +901,7 @@ export class World3D {
     });
   }
 
-  /** Tie each lantern down before the wind takes it, while gusts shove you around. */
+  /** Tie each lantern down before the wind takes it. You do the walking: the storm is in the sky, not in your legs. */
   runSecure(): Promise<void> {
     const todo = this.hookLanterns.map((_, i) => i).filter((i) => i >= this.world.lanternsLost);
     let tied = 0;
@@ -916,10 +925,7 @@ export class World3D {
           resolve();
         }
       };
-      this.tick = (dt) => {
-        // Gusts come and go, blowing one way and then the other.
-        this.gust = Math.sin(this.time / 0.9) * 140 + Math.sin(this.time / 0.37) * 60;
-        if (this.moveTo === null) this.px += this.gust * dt;
+      this.tick = () => {
         this.px = THREE.MathUtils.clamp(this.px, 2150, 2950);
         const i = this.nearestHook();
         if (i >= 0 && todo.includes(i) && !this.hookLanterns[i].tied) this.showPrompt(at(HOOKS[i].x, STRING_Z), "Tie it down", tryTie);
@@ -946,6 +952,7 @@ export class World3D {
       const finish = () => {
         this.tick = null;
         this.tiding = false;
+        this.tideIn = 0;
         this.tideAction = null;
         this.hidePrompt();
         this.setLocked(true);
@@ -985,6 +992,7 @@ export class World3D {
           this.moveTo = null;
         }
         this.coast.setWater(share());
+        this.tideIn = share();
         for (const item of SHED_ITEMS) {
           if (saved.includes(item.id) || lost.has(item.id) || top() > item.y - 12) continue;
           lost.add(item.id);
@@ -1047,6 +1055,8 @@ export class World3D {
 
   dispose() {
     cancelAnimationFrame(this.raf);
+    this.hooks.sound.setWaves(0);
+    this.hooks.sound.setNature({ gulls: 0, birds: 0, insects: 0, brook: 0, fountain: 0 });
     this.resizer.disconnect();
     removeEventListener("keydown", this.onKeyDown);
     removeEventListener("keyup", this.onKeyUp);
@@ -1181,6 +1191,8 @@ export class World3D {
     const region = regionAt(this.px);
     if (region !== this.region) this.enterRegion(region);
     this.kits[this.region.id].update(dt, t);
+    this.hooks.sound.setWaves(wavesAt(this.px, this.pz, this.tideIn));
+    this.hooks.sound.setNature(natureAt(this.px, this.pz, this.world.weather === "clear" && this.moodFor(this.world) === "day", this.world.weather === "snow"));
 
     this.updateLight(dt);
     this.updateCamera(dt);

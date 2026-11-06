@@ -237,11 +237,12 @@ kbd {
 /* Chapter two and three panels */
 .signals { margin: 0; padding-left: 1.2em; font-family: var(--serif); line-height: 1.6; }
 .breath-art { width: 100%; max-height: 32cqw; }
-.breath-ring { fill: none; stroke: #ffffff22; stroke-width: 2; stroke-dasharray: 4 6; }
-.breath-orb { fill: #8fc7d6; opacity: 0.85; filter: drop-shadow(0 0 18px #8fc7d6); transition: r 0.08s linear; }
+.breath-halo { fill: #8fc7d6; opacity: 0.16; }
+.breath-orb { fill: #8fc7d6; opacity: 0.85; transition: r 0.08s linear; }
 .breath-cue { margin: 0; text-align: center; font-family: var(--serif); font-size: 1.3em; color: var(--paper); }
 .panel-card .row { display: flex; gap: 0.7em; justify-content: center; }
 .breath-btn { touch-action: none; user-select: none; }
+.breath-btn:focus-visible { outline: none; }
 .breath-btn.held { background: #fff1c9; box-shadow: 0 0 20px #f2b54a; }
 .chapters { color: var(--muted); font-size: 0.9em; margin: 0 0 0.8em; }
 .link-btn { background: none; border: none; padding: 0 0.2em; color: var(--amber); text-decoration: underline; text-underline-offset: 3px; font-size: 1em; }
@@ -474,3 +475,23 @@ body.in-hub #meter { display: none; }
 button.paint { width: 2.2em; height: 2.2em; border-radius: 50%; border: 2px solid transparent; padding: 0; }
 button.paint.on { border-color: var(--amber); box-shadow: 0 0 0 2px #0006; }
 .item-tile.empty { opacity: 0.5; border-style: dashed; }
+
+/* The tip about what to try next, and the guide. */
+.hud-bag.hud-guide { bottom: 12.2cqw; }
+.hud-tip { margin-top: 0.6em; padding-top: 0.5em; border-top: 1px solid #ffffff22; }
+.hud-tip[hidden] { display: none; }
+.hud-tip strong { display: block; font-family: var(--serif); font-weight: normal; color: var(--amber); }
+.hud-tip p { font-family: inherit; font-size: 0.92em; color: var(--paper); margin: 0.15em 0 0.4em; }
+.hud-tip-row { display: flex; gap: 0.5em; }
+.hud-tip-row button { font: inherit; font-size: 0.85em; padding: 0.2em 0.7em; border-radius: 8px; border: 1px solid #ffffff33; background: #ffffff14; color: var(--paper); cursor: pointer; }
+.panel-card.guide { max-height: 86cqh; display: flex; flex-direction: column; }
+.guide-list { list-style: none; margin: 0.4em 0; padding: 0 0.4em 0 0; overflow-y: auto; flex: 1; min-height: 0; }
+.guide-list li { display: flex; gap: 0.7em; padding: 0.55em 0.5em; border-radius: 10px; }
+.guide-list li.next { background: #f2b54a1f; }
+.guide-list li.shut { opacity: 0.6; }
+.guide-list p { margin: 0.15em 0 0; font-size: 0.92em; color: var(--muted); }
+.guide-note { margin: 0.5em 0 0.7em; font-size: 0.8em; color: var(--muted); }
+.guide-mark { flex: none; width: 1.4em; height: 1.4em; border-radius: 50%; border: 1.5px solid #ffffff44; display: grid; place-items: center; font-size: 0.85em; color: #1c1408; }
+.guide-list li.done .guide-mark { background: var(--amber); border-color: var(--amber); }
+.name-box { font: inherit; padding: 0.4em 0.6em; border-radius: 8px; border: 1px solid var(--line); background: #ffffff12; color: var(--paper); width: min(100%, 16em); box-sizing: border-box; }
+.name-box:focus { outline: 2px solid var(--amber); outline-offset: 1px; }

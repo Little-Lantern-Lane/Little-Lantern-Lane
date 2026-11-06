@@ -11,13 +11,17 @@ import type { Completeness } from "./logic/outcome";
 import type { GameEvent } from "./logic/tags";
 import { createSound, type Sfx } from "./audio/sound";
 import { World3D, type SceneHooks } from "./world3d/World";
-import { FISHING_SPOTS, GROUND_Y, NEXT_GIVER, NODES, riverMidX, TRAILS } from "./game/layout";
+import { BEACH_NODES, BEACH_SPOTS, distToTrail, FISHING_SPOTS, GROUND_Y, NEXT_GIVER, NODES, riverMidX, TRAILS, woodsLimit } from "./game/layout";
+import { bandAt, groundH, regionZ } from "./world3d/space";
 import { createDialogueBox } from "./ui/dialogue";
 import { createHud } from "./ui/hud";
 import { createMeterView } from "./ui/meter";
+import { nextStep, type GuideFacts } from "./logic/guide";
+import { runGuide } from "./ui/guide";
 import { factCard, runBreathScene, runChainScene, runCheckInScene, runFitScene, runMendScene, runSaveScene, runSayItScene } from "./ui/scenes";
-import { CHAPTER_NAMES, clearSave, readBag, readLooks, readSave, writeBag, writeLooks, writeSave, type Looks, type SaveChapter, type SaveGame } from "./save";
-import { buildAddition, DEFAULT_CHARACTER, DEFAULT_HOME, growRoom, hasAddition, remainingAdditions, type Decor } from "./logic/appearance";
+import { CHAPTER_NAMES, clearSave, readBag, readLooks, readSave, readTips, writeBag, writeLooks, writeSave, writeTips, type Looks, type SaveChapter, type SaveGame } from "./save";
+import { ADDITIONS, buildAddition, DEFAULT_CHARACTER, DEFAULT_HOME, freeAdditionDue, growRoom, hasAddition, type Addition, type Decor } from "./logic/appearance";
+import { DEFAULT_NAME } from "./logic/appearance";
 import { addPiece, canPlace, FURNITURE, place, putAway, turnPiece, type Furnishings, type FurnitureId } from "./logic/furniture";
 import { makeLantern, swapShelf, toTable, buyItem, canAfford, canGift, countOf, craft, gather, give, ITEMS, makeTool, pay, sell, spendItems, type BagState, type Buyer, type Friend, type ItemId } from "./logic/bag";
 import { COIN, itemIcon } from "./ui/items";
@@ -33,7 +37,7 @@ document.body.classList.toggle("touch", touch);
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
 
 const sound = createSound();
-const dialogue = createDialogueBox($("#dialogue"), sound, reducedMotion, (who, open) => world?.setMouth(who, open));
+const dialogue = createDialogueBox($("#dialogue"), sound, reducedMotion, (who, open) => world?.setMouth(who, open), () => yourName());
 const hud = createHud($("#hud"), sound, touch);
 const meter = createMeterView($("#meter"), reducedMotion);
 const panel = $("#panel");
@@ -43,6 +47,15 @@ const titleCard = $("#title");
 const savedLooks = readLooks();
 let looks: Looks = savedLooks ?? { character: DEFAULT_CHARACTER, home: DEFAULT_HOME, owned: [] };
 let chosenLooks = savedLooks !== null;
+const yourName = () => looks.character.name || DEFAULT_NAME;
+/** The story being played, so a new name reaches it straight away. */
+let storyNow: Engine | null = null;
+/** Someone who chose how they look before you could choose a name gets asked once. */
+async function askName() {
+  if (looks.character.name) return;
+  hideLoader(); // the character screen sits underneath it
+  await chooseCharacter();
+}
 function useLooks(next: Looks) {
   looks = next;
   applyCharacter(looks.character);
@@ -53,6 +66,7 @@ applyCharacter(looks.character);
 async function chooseCharacter() {
   const character = await runCharacterScreen(panel, looks.character, () => sound.play("ui"), looks.owned);
   useLooks({ ...looks, character });
+  storyNow?.setVar("player_name", yourName());
   world?.refreshLook();
 }
 
@@ -61,10 +75,10 @@ async function chooseHome() {
   useLooks({ ...looks, home });
 }
 
-/** At a save point the home gets room for one more thing, whatever happened in the chapter. */
+/** The first chapter you finish gives your home one addition, whatever happened in it. The rest are Tobin's to build. */
 async function growHome() {
-  const roomier = growRoom(looks.home);
-  if (roomier.slots === looks.home.slots || remainingAdditions(roomier).length === 0) return;
+  if (!freeAdditionDue(looks.home)) return;
+  const roomier = { ...growRoom(looks.home), gotFree: true };
   const home = await runGrowScene(panel, roomier, () => sound.play("light"));
   useLooks({ ...looks, home });
   await world?.refreshHome(looks.home);
@@ -110,6 +124,13 @@ const WOODS_GOALS = [
   "Cross the river. Bring Tobin 2 birch bark, a glowcap and some skyglass for a lantern.",
   "Stay as long as you like, then walk home.",
 ];
+
+/** Goals the story sets partway through a chapter. */
+const STORY_GOALS: Record<string, string> = {
+  tell_rest: "Tell Mara or Ash you're taking the afternoon, then go up to the hollow to rest.",
+  go_rest: "Go up to the hollow and rest. Someone knows where you are.",
+  last_night: "Get ready for the last night of the festival.",
+};
 
 function showChapter(level: number) {
   const c = CHAPTERS[level];
@@ -185,6 +206,7 @@ function paintBag() {
   villageButton.hidden = state.world.level === 8;
   mapButton.hidden = state.world.level !== 8;
   bagButton.innerHTML = `<span>Bag (B)</span><span class="coins">${COIN}${state.bag.coins}</span>`;
+  paintGuide();
 }
 
 async function openBag() {
@@ -194,7 +216,7 @@ async function openBag() {
   await runBagScreen(panel, () => state.bag, (tool) => {
     setBag(makeTool(state.bag, tool));
     sound.play("mend");
-  }, () => (change = true));
+  }, () => (change = true), touch);
   if (change) await chooseCharacter();
   if (bagFree) world?.setLocked(false);
 }
@@ -238,7 +260,41 @@ addEventListener("keydown", (e) => {
   if (e.code === "KeyB" && !e.repeat) void openBag();
   if (e.code === "KeyF" && !e.repeat) void openFurnish();
   if (e.code === "KeyM" && !e.repeat) void openMap();
+  if (e.code === "KeyH" && !e.repeat) void openGuide();
 });
+const guideButton = document.createElement("button");
+guideButton.className = "hud-bag hud-guide";
+guideButton.textContent = "Guide (H)";
+guideButton.hidden = true;
+guideButton.addEventListener("click", () => void openGuide());
+$("#hud").append(guideButton);
+let tipsOn = readTips();
+
+function guideFacts(): GuideFacts {
+  const level = state.world.level;
+  return { bag: state.bag, mode: level === 8 ? "village" : level === 7 ? "week" : "chapter", touch, furnished: looks.home.furniture.placed.length > 0 };
+}
+
+function setTips(on: boolean) {
+  tipsOn = on;
+  writeTips(on);
+  paintGuide();
+}
+
+/** The guide goes wherever the bag goes. The tip stays in the free parts of the game, and out of the way of chapters. */
+function paintGuide() {
+  guideButton.hidden = bagButton.hidden;
+  const free = state.world.level === 8 || state.world.level === 7 || inWoods;
+  hud.setTip(tipsOn && free && !bagButton.hidden ? nextStep(guideFacts()) : null, () => void openGuide(), () => setTips(false));
+}
+
+async function openGuide() {
+  if (guideButton.hidden || !panel.hidden || !bagFree) return;
+  world?.setLocked(true);
+  await runGuide(panel, guideFacts, () => tipsOn, setTips);
+  if (bagFree) world?.setLocked(false);
+}
+
 mapButton = document.createElement("button");
 mapButton.className = "hud-bag hud-map";
 mapButton.textContent = "Map (M)";
@@ -255,11 +311,12 @@ $("#hud").append(furnishButton);
 function setFurniture(furniture: Furnishings) {
   useLooks({ ...looks, home: { ...looks.home, furniture } });
   void world?.refreshHome(looks.home);
+  paintBag();
 }
 
 /** What's already yours, so the shops can say so. */
 function ownedAtTobin(): string[] {
-  return [...looks.home.decor, ...(hasAddition(looks.home, "up") ? ["room_up"] : []), ...(hasAddition(looks.home, "side") ? ["room_side"] : [])];
+  return [...looks.home.decor, ...ADDITIONS.filter((a) => hasAddition(looks.home, a)).map((a) => `room_${a}`)];
 }
 
 /** F, inside your home: put furniture down, move it, or make some. */
@@ -304,8 +361,8 @@ function buy(row: ShopRow) {
     setBag(buyItem(payBack(row.price), row.id.slice(5) as ItemId));
   } else if (row.id.startsWith("piece_")) {
     setFurniture(addPiece(looks.home.furniture, row.id.slice(6) as FurnitureId));
-  } else if (row.id === "room_up" || row.id === "room_side") {
-    useLooks({ ...looks, home: buildAddition(looks.home, row.id === "room_up" ? "up" : "side") });
+  } else if (row.id.startsWith("room_")) {
+    useLooks({ ...looks, home: buildAddition(looks.home, row.id.slice(5) as Addition) });
     void world?.refreshHome(looks.home);
   } else if (clothes) {
     const slot = row.id === "leafcape" ? "extra" : "hat";
@@ -330,6 +387,7 @@ function apply(ev: GameEvent) {
   meter.render(state.meter);
   if (ev.name === "chapter") showChapter(state.world.level);
   if (ev.name === "woods_goal") hud.setGoal(WOODS_GOALS[Number(ev.arg)] ?? "");
+  if (ev.name === "story_goal") hud.setGoal(STORY_GOALS[ev.arg ?? ""] ?? "");
   paintBag();
   const sfx = EVENT_SFX[ev.name];
   if (sfx) sound.play(sfx);
@@ -414,6 +472,8 @@ async function play(chosen: Variant, from?: string, resume?: SaveGame) {
   const engine = new Engine(await storyJson, variant, () => state.meter.distress, () => state.bag);
   if (resume) engine.loadState(resume.story);
   else if (from) engine.startAt(from);
+  engine.setVar("player_name", yourName());
+  storyNow = engine;
   if (inVillage) {
     const next = NEXT_GIVER[readSave()?.chapter ?? 1];
     engine.setVar("next_giver", next.who);
@@ -658,6 +718,7 @@ async function begin(v: Variant, from?: string, resume?: SaveGame) {
     await chooseHome();
     chosenLooks = true;
   }
+  await askName();
   play(v, from, resume).catch((err) => {
     console.error(err);
     void dialogue.say(String(err instanceof Error ? err.message : err), null);
@@ -696,7 +757,7 @@ window.addEventListener("keydown", () => sound.unlock(), { once: true });
 
 // ?debug exposes the world for automated playtesting (walk the player, read state).
 if (new URLSearchParams(location.search).has("debug")) {
-  Object.assign(window, { lantern: { world: () => world, state: () => state, growHome, NODES, FISHING_SPOTS, riverMidX, TRAILS } });
+  Object.assign(window, { lantern: { world: () => world, state: () => state, growHome, NODES, FISHING_SPOTS, riverMidX, TRAILS, distToTrail, regionZ, groundH, BEACH_NODES, BEACH_SPOTS, woodsLimit, bandAt, begin } });
 }
 
 /** The first thing you see: the lanterns light, and then you come in. ?title shows the old chapter list instead. */
@@ -720,6 +781,7 @@ async function open() {
     await chooseHome();
     chosenLooks = true;
   }
+  await askName();
   void begin("main", "village_hub");
 }
 void open();

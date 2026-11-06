@@ -6,6 +6,7 @@ import type { Sound } from "../audio/sound";
 
 export interface Hud {
   setGoal(text: string): void;
+  setTip(step: { title: string; short: string } | null, onHow: () => void, onHide: () => void): void;
   /** The on-screen action button: what tapping it does right now, or hidden. */
   setAction(label: string | null, run: (() => void) | null): void;
   setNext(choices: StoryChoice[]): void;
@@ -19,7 +20,7 @@ export interface Hud {
 
 export function createHud(root: HTMLElement, sound: Sound, touch: boolean): Hud {
   root.innerHTML = `
-    <div class="hud-goal"><span class="hud-label">Goal</span><p>Light up the square for the lantern festival.</p><ul class="hud-next"></ul></div>
+    <div class="hud-goal"><span class="hud-label">Goal</span><p>Light up the square for the lantern festival.</p><ul class="hud-next"></ul><div class="hud-tip" hidden><span class="hud-label">Try this</span><strong></strong><p></p><div class="hud-tip-row"><button class="tip-how">How?</button><button class="tip-hide">Hide tips</button></div></div></div>
     <div class="hud-area" aria-live="polite"></div>
     <div class="hud-controls"></div>
     <button class="hud-headup" hidden>Head up</button>
@@ -94,10 +95,23 @@ export function createHud(root: HTMLElement, sound: Sound, touch: boolean): Hud 
       };
 
   const goal = root.querySelector<HTMLElement>(".hud-goal p")!;
+  const tip = root.querySelector<HTMLElement>(".hud-tip")!;
+  let tipHow = () => {};
+  let tipHide = () => {};
+  tip.querySelector(".tip-how")!.addEventListener("click", () => tipHow());
+  tip.querySelector(".tip-hide")!.addEventListener("click", () => tipHide());
 
   return {
     setGoal(text) {
       goal.textContent = text;
+    },
+    setTip(step, onHow, onHide) {
+      tip.hidden = !step;
+      if (!step) return;
+      tip.querySelector("strong")!.textContent = step.title;
+      tip.querySelector("p")!.textContent = step.short;
+      tipHow = onHow;
+      tipHide = onHide;
     },
     setAction(label, run) {
       actionRun = run;

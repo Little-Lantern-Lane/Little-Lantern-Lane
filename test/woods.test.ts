@@ -290,3 +290,18 @@ describe("the far bank story", () => {
     }
   });
 });
+
+describe("a bridge you've built", () => {
+  it("is still there when you play the week again, and nothing asks you to build it twice", async () => {
+    const { Engine } = await import("../src/engine");
+    const { initialBag } = await import("../src/logic/bag");
+    const json = (await import("node:fs")).readFileSync("public/festival.json", "utf8").replace(/^﻿/, "");
+    const bag = { ...initialBag(), built: ["bridge"], items: { driftwood: 9, ironstone: 9 } };
+    const e = new Engine(json, "main", () => 0, () => bag);
+    e.startAt("start_woods");
+    const text = e.continueBatch().map((l) => l.text).join(" ");
+    expect(text).toContain("still standing");
+    expect(e.getVar("woods_stage")).toBe(1);
+    expect(text).not.toContain("Six good lengths");
+  });
+});

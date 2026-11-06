@@ -4,7 +4,7 @@
 
 import {
   ADDITIONS, ANIMALS, BODIES, BOUGHT_CLOTHES, CUSTOM_PARTS, DOOR_COLORS, EXTRAS, HATS, HOME_STYLES, OUTFITS, ROOF_COLORS, WALL_COLORS,
-  remainingAdditions, toggleAddition,
+  cleanName, DEFAULT_NAME, MAX_NAME, remainingAdditions, toggleAddition,
   type Addition, type CharacterChoice, type CustomHome, type HomeChoice,
 } from "../logic/appearance";
 import type { Expression } from "../logic/cast";
@@ -207,9 +207,20 @@ export function runCharacterScreen(panel: HTMLElement, start: CharacterChoice, o
       preview.append(stage, h("p", { class: "hint", text: describeCharacter(c) }), feelings);
 
       const a = ANIMAL_LOOKS[c.animal];
+      const nameBox = document.createElement("input");
+      nameBox.className = "name-box";
+      nameBox.type = "text";
+      nameBox.maxLength = MAX_NAME;
+      nameBox.placeholder = DEFAULT_NAME;
+      nameBox.value = c.name;
+      nameBox.autocomplete = "off";
+      nameBox.setAttribute("aria-label", "Your name");
+      nameBox.addEventListener("input", () => (c = { ...c, name: nameBox.value }));
+      const nameGroup = h("div", { class: "pick-group" }, h("span", { class: "pick-label", text: "Your name" }), nameBox);
       const choices = h(
         "div",
         { class: "wardrobe-choices" },
+        nameGroup,
         pickRow("Body", BODIES, (b) => BODY_NAMES[b], c.body, (body) => set({ body })),
         pickRow("Animal", ANIMALS, (x) => ANIMAL_LOOKS[x].name, c.animal, (animal) => set({ animal, fur: 0 })),
         pickRow("Fur", [0, 1, 2], (i) => a.furs[i].name, c.fur, (fur) => set({ fur }), (i) => a.furs[i].fur),
@@ -220,7 +231,7 @@ export function runCharacterScreen(panel: HTMLElement, start: CharacterChoice, o
       );
       const done = button("That's me", "primary", () => {
         close(panel);
-        resolve(c);
+        resolve({ ...c, name: cleanName(c.name) || DEFAULT_NAME });
       });
       show(
         panel,
@@ -235,7 +246,8 @@ export function runCharacterScreen(panel: HTMLElement, start: CharacterChoice, o
       );
     };
     render();
-    panel.querySelector<HTMLButtonElement>(".wardrobe .primary")?.focus();
+    if (start.name) panel.querySelector<HTMLButtonElement>(".wardrobe .primary")?.focus();
+    else panel.querySelector<HTMLInputElement>(".name-box")?.focus();
   });
 }
 
@@ -299,20 +311,23 @@ export function runHomeScreen(panel: HTMLElement, start: HomeChoice, onPick?: ()
         groups.push(h("div", { class: "pick-group" }, toggle("Shutters", home.custom.shutters, (shutters) => setPart({ shutters })), toggle("Flower boxes", home.custom.boxes, (boxes) => setPart({ boxes }))));
       }
 
-      // Additions: as many as the home has room for, which grows at each save point.
+      // Additions: the free one, and any Tobin has built. What the home already had stays.
       const full = home.grown.length >= home.slots;
       const adds = h("div", { class: "pick-group" }, h("span", { class: "pick-label", text: "Additions" }));
       adds.append(
         h("p", {
           class: "hint",
           text: home.slots === 0
-            ? "Your home grows as you play: at each save point it gets room for one more thing."
-            : `Room for ${home.slots} of 4. Your home gets room for one more at each save point.`,
+            ? "Finish your first chapter and your home gets one addition for free. After that, Tobin builds them for coins."
+            : !full
+              ? "You have room to choose one. It stays once you're done here, and Tobin builds more for coins."
+              : `You have ${home.slots} of 4. Tobin builds more for coins.`,
         }),
       );
       for (const a of ADDITIONS) {
         const on = home.grown.includes(a);
-        adds.append(toggle(additionName(home, a), on, () => set({ grown: toggleAddition(home, a).grown }), !on && full));
+        const stays = start.grown.includes(a);
+        adds.append(toggle(additionName(home, a), on, () => set({ grown: toggleAddition(home, a, start.grown).grown }), stays || (!on && full)));
       }
       groups.push(adds);
 
@@ -366,7 +381,7 @@ export function runGrowScene(panel: HTMLElement, home: HomeChoice, onPick?: () =
         { class: "panel-card wardrobe" },
         h("p", { class: "eyebrow", text: "Your home" }),
         h("h2", { text: "Your home has room to grow" }),
-        h("p", { class: "hint", text: "Choose one thing to add. You can change it any time from the title screen." }),
+        h("p", { class: "hint", text: "This one's free. Choose one thing to add. After this, Tobin can build the rest for coins." }),
         grid,
         h("div", { class: "row" }, later),
       ),
