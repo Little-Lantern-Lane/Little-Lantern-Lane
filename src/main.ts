@@ -11,17 +11,18 @@ import type { Completeness } from "./logic/outcome";
 import type { GameEvent } from "./logic/tags";
 import { createSound, type Sfx } from "./audio/sound";
 import { World3D, type SceneHooks } from "./world3d/World";
-import { BEACH_NODES, BEACH_SPOTS, distToTrail, FISHING_SPOTS, GROUND_Y, NEXT_GIVER, NODES, riverMidX, TRAILS, woodsLimit } from "./game/layout";
+import { BEACH_NODES, BEACH_SPOTS, distToTrail, FISHING_SPOTS, ALL_PLAYED, GROUND_Y, LANTERN_ROW, NEXT_GIVER, NODES, riverMidX, TRAILS, woodsLimit } from "./game/layout";
 import { bandAt, groundH, regionZ } from "./world3d/space";
 import { createDialogueBox } from "./ui/dialogue";
 import { createHud } from "./ui/hud";
 import { createMeterView } from "./ui/meter";
 import { nextStep, type GuideFacts } from "./logic/guide";
 import { runGuide } from "./ui/guide";
-import { factCard, runBreathScene, runChainScene, runCheckInScene, runFitScene, runMendScene, runSaveScene, runSayItScene } from "./ui/scenes";
-import { CHAPTER_NAMES, clearSave, readBag, readLooks, readSave, readTips, writeBag, writeLooks, writeSave, writeTips, type Looks, type SaveChapter, type SaveGame } from "./save";
+import { factCard, runBreathScene, runChainScene, runCheckInScene, runFitScene, runMendScene, runPlayedScene, runSaveScene, runSayItScene } from "./ui/scenes";
+import { CHAPTER_NAMES, clearSave, readBag, readLooks, readProgress, readSave, readTips, writeBag, writeLooks, writeProgress, writeSave, writeTips, type Looks, type SaveChapter, type SaveGame } from "./save";
 import { ADDITIONS, buildAddition, DEFAULT_CHARACTER, DEFAULT_HOME, freeAdditionDue, growRoom, hasAddition, type Addition, type Decor } from "./logic/appearance";
 import { DEFAULT_NAME } from "./logic/appearance";
+import { atSavePoint, finishLevel, hasFinished, nextLevel, type Progress } from "./logic/progress";
 import { addPiece, canPlace, FURNITURE, place, putAway, turnPiece, type Furnishings, type FurnitureId } from "./logic/furniture";
 import { makeLantern, swapShelf, toTable, buyItem, canAfford, canGift, countOf, craft, gather, give, ITEMS, makeTool, pay, sell, spendItems, type BagState, type Buyer, type Friend, type ItemId } from "./logic/bag";
 import { COIN, itemIcon } from "./ui/items";
@@ -246,7 +247,7 @@ async function useStall() {
 async function openMap() {
   if (!world || state.world.level !== 8 || !panel.hidden || !bagFree) return;
   world.setLocked(true);
-  const pick = await runMapScene(panel, state.world.props.includes("bridge"));
+  const pick = await runMapScene(panel, state.world.props.includes("bridge"), progress.finished);
   if (bagFree) world.setLocked(false);
   if (pick?.kind === "place") world.travel(pick.x, pick.z);
   if (pick?.kind === "part") leaveVillage?.(pick);
@@ -453,6 +454,13 @@ function waitForChoice(choices: StoryChoice[]): Promise<StoryChoice> {
   });
 }
 
+/** What you've finished. The village reads this, not the save, so playing something again can't move your place. */
+let progress: Progress = readProgress();
+function setProgress(next: Progress) {
+  progress = next;
+  writeProgress(progress);
+}
+
 const CHAPTER_ORDINAL: Record<SaveChapter, string> = { 2: "chapter two", 3: "chapter three", 4: "chapter four", 5: "chapter five", 6: "chapter six", 7: "the far bank" };
 const FINISHED: Record<SaveChapter, string> = { 2: "Chapter one", 3: "Chapter two", 4: "The far bank", 5: "Chapter four", 6: "Chapter five", 7: "Chapter three" };
 
@@ -476,8 +484,10 @@ async function play(chosen: Variant, from?: string, resume?: SaveGame) {
   engine.setVar("player_name", yourName());
   storyNow = engine;
   if (inVillage) {
-    const next = NEXT_GIVER[readSave()?.chapter ?? 1];
+    const level = nextLevel(progress);
+    const next = level === null ? ALL_PLAYED : NEXT_GIVER[level];
     engine.setVar("next_giver", next.who);
+    engine.setVar("next_level", level ?? 0);
     hud.setGoal(next.line);
   }
   const log = new PlaytestLog(variant);
@@ -509,6 +519,17 @@ async function play(chosen: Variant, from?: string, resume?: SaveGame) {
       hud.setNext([]);
       const next = Number(engine.getVar("next_chapter")) as SaveChapter;
       engine.choose(0);
+      const done = state.world.level;
+      const plan = atSavePoint(progress, done, next);
+      setProgress(plan.progress);
+      if (!plan.onPath) {
+        // A replay or a jump ahead: your save stays where it was, and you go back to the village.
+        if (plan.firstTime) await growHome();
+        log.record("played", { level: done });
+        await runPlayedScene(panel, LANTERN_ROW.find((l) => l.level === done && !l.variant)?.name ?? "That part");
+        void begin("main", "village_hub");
+        return;
+      }
       const saved = writeSave({ chapter: next, variant, story: engine.saveState(), game: state });
       await growHome();
       log.record("save", { chapter: next, saved });
@@ -573,7 +594,8 @@ async function play(chosen: Variant, from?: string, resume?: SaveGame) {
       } else if (scene === "startpart") {
         // Whoever has the bright bubble starts the next part: your save if you've one, or the beginning.
         const save = readSave();
-        void (save ? begin(save.variant, undefined, save) : begin("main"));
+        const level = nextLevel(progress);
+        void (save?.chapter === level ? begin(save.variant, undefined, save) : begin("main", LANTERN_ROW.find((l) => l.level === level && !l.variant)?.knot));
         return;
       } else if (scene === "lanterns") {
         await runLanternScene(panel, () => state.bag, (l) => {
@@ -662,7 +684,10 @@ async function play(chosen: Variant, from?: string, resume?: SaveGame) {
   }
 
   log.record("end");
-  clearSave();
+  setProgress(finishLevel(progress, state.world.level));
+  // Only a save you've now played past goes: finishing a replay mustn't lose your place.
+  const left = readSave();
+  if (left && hasFinished(progress, left.chapter)) clearSave();
   dialogue.hide();
   showEnd(log);
 }
@@ -751,6 +776,7 @@ for (const [id, choose] of [["#edit-look", chooseCharacter], ["#edit-home", choo
 }
 $("#start-over").addEventListener("click", () => {
   clearSave();
+  setProgress({ finished: [] });
   showTitle();
 });
 window.addEventListener("pointerdown", () => sound.unlock(), { once: true });

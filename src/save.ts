@@ -5,6 +5,7 @@
 import type { GameState } from "./logic/state";
 import type { Variant } from "./logic/facts";
 import { normalizeBag, type BagState } from "./logic/bag";
+import { normalizeProgress, progressFromSave, type Progress } from "./logic/progress";
 import { BOUGHT_CLOTHES, normalizeCharacter, normalizeHome, type CharacterChoice, type HomeChoice } from "./logic/appearance";
 
 const KEY = "lantern-night:save";
@@ -95,6 +96,28 @@ export function readBag(store: Storage | null = storage()): BagState {
   } catch {
     return normalizeBag(null);
   }
+}
+
+// What you've finished, kept apart from the save: playing something again doesn't touch it.
+
+const PROGRESS_KEY = "lantern-night:progress";
+
+export function writeProgress(progress: Progress, store: Storage | null = storage()): void {
+  try {
+    store?.setItem(PROGRESS_KEY, JSON.stringify(progress));
+  } catch {
+    // It just won't last past this visit.
+  }
+}
+
+export function readProgress(store: Storage | null = storage()): Progress {
+  try {
+    const raw = store?.getItem(PROGRESS_KEY);
+    if (raw) return normalizeProgress(JSON.parse(raw));
+  } catch {
+    // Fall through to working it out from the save.
+  }
+  return progressFromSave(readSave(store)?.chapter);
 }
 
 // Whether the tip about what to try next shows on screen.

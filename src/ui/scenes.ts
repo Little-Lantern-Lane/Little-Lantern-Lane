@@ -299,6 +299,24 @@ export function runSaveScene(panel: HTMLElement, finished: string, next: string,
   });
 }
 
+/** The end of a part played out of turn: nothing moved, so all that's left is to go back. */
+export function runPlayedScene(panel: HTMLElement, finished: string): Promise<void> {
+  return new Promise((resolve) => {
+    const back = button("Back to the village", "primary", () => {
+      closePanel(panel);
+      resolve();
+    });
+    openPanel(
+      panel,
+      h("p", { class: "eyebrow", text: "Finished" }),
+      h("h2", { text: `${finished} complete` }),
+      h("p", { class: "save-note", text: "Your place in the story and everything you've built are just as you left them." }),
+      h("div", { class: "row" }, back),
+    );
+    back.focus();
+  });
+}
+
 // --- Mending -------------------------------------------------------------------
 
 /** Patch the torn lantern (borrowed-lantern story) or bend the dented one back. */

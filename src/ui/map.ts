@@ -14,7 +14,10 @@ const LAMPS: Record<string, [number, number, string]> = {
   lantern_far: [240, 120, "#4fa3a0"], lantern_4: [690, 140, "#d98a4a"], lantern_5: [176, 322, "#a9c4e8"], lantern_6: [848, 392, "#c94f6d"],
 };
 
-function drawing(bridge: boolean): string {
+/** The borrowed lantern is another telling of the first night, so finishing that night doesn't count as playing it. */
+const isPlayed = (l: (typeof LANTERN_ROW)[number], played: number[]) => !l.variant && played.includes(l.level);
+
+function drawing(bridge: boolean, played: number[]): string {
   const trees = Array.from({ length: 34 }, (_, i) => [30 + ((i * 53) % 330), 86 + ((i * 31) % 120)]);
   const places = Object.entries(MAP_PLACES).map(([id, p]) => {
     const [x, y] = LABELS[id];
@@ -23,7 +26,9 @@ function drawing(bridge: boolean): string {
   });
   const lamps = LANTERN_ROW.map((l) => {
     const [x, y, c] = LAMPS[l.id];
-    return `<g class="map-go lamp" data-part="${l.id}" role="button" tabindex="0" aria-label="Play ${l.name}"><title>${l.name}</title><circle cx="${x}" cy="${y}" r="24" fill="${c}" opacity=".3"/><path d="M${x} ${y - 24}v9" stroke="#5f4029" stroke-width="2.5"/><ellipse cx="${x}" cy="${y}" rx="13" ry="15" fill="${c}" stroke="#5f4029" stroke-width="2"/></g>`;
+    const done = isPlayed(l, played);
+    const tick = done ? `<circle cx="${x + 13}" cy="${y + 13}" r="9" fill="#fffaf0" stroke="#5f4029" stroke-width="2"/><path d="M${x + 9} ${y + 13}l3 3 5-6" fill="none" stroke="#5f8a4f" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>` : "";
+    return `<g class="map-go lamp" data-part="${l.id}" role="button" tabindex="0" aria-label="${done ? "Play again" : "Play"}: ${l.name}"><title>${l.name}</title><circle cx="${x}" cy="${y}" r="24" fill="${c}" opacity=".3"/><path d="M${x} ${y - 24}v9" stroke="#5f4029" stroke-width="2.5"/><ellipse cx="${x}" cy="${y}" rx="13" ry="15" fill="${c}" stroke="#5f4029" stroke-width="2"/>${tick}</g>`;
   });
   return `<svg class="map-svg" viewBox="0 0 960 540" role="group" aria-label="Map of the village">
     <rect width="960" height="540" fill="#5a3d2a"/>
@@ -46,7 +51,7 @@ function drawing(bridge: boolean): string {
 }
 
 /** Shows the map. Resolves with where to go, or null if you close it. */
-export function runMapScene(panel: HTMLElement, bridge: boolean): Promise<MapPick | null> {
+export function runMapScene(panel: HTMLElement, bridge: boolean, played: number[]): Promise<MapPick | null> {
   return new Promise((resolve) => {
     const card = document.createElement("div");
     card.className = "panel-card map-card";
@@ -54,11 +59,18 @@ export function runMapScene(panel: HTMLElement, bridge: boolean): Promise<MapPic
     note.className = "map-note";
     note.textContent = "Click a place to go there, or a lantern to play that part of the story.";
     const box = document.createElement("div");
-    box.innerHTML = drawing(bridge);
+    box.innerHTML = drawing(bridge, played);
     const close = document.createElement("button");
     close.className = "primary";
     close.textContent = "Close";
-    card.append(box, note, close);
+    // A part you've finished asks first, so a stray click can't take you out of the village.
+    const again = document.createElement("button");
+    again.className = "primary";
+    again.hidden = true;
+    const buttons = document.createElement("div");
+    buttons.className = "row";
+    buttons.append(again, close);
+    card.append(box, note, buttons);
     panel.replaceChildren(card);
     panel.hidden = false;
     const finish = (v: MapPick | null) => {
@@ -80,7 +92,14 @@ export function runMapScene(panel: HTMLElement, bridge: boolean): Promise<MapPic
         return;
       }
       const part = LANTERN_ROW.find((l) => l.id === g.dataset.part);
-      if (part) finish({ kind: "part", knot: part.knot, variant: part.variant });
+      if (!part) return;
+      const pick: MapPick = { kind: "part", knot: part.knot, variant: part.variant };
+      if (!isPlayed(part, played)) return finish(pick);
+      note.textContent = `You've played ${part.name}. Playing it again starts it over; your place in the story and everything you've built stay as they are.`;
+      again.textContent = "Play it again";
+      again.hidden = false;
+      again.onclick = () => finish(pick);
+      again.focus();
     };
     box.addEventListener("click", (e) => choose(e.target as Element));
     box.addEventListener("keydown", (e) => {
@@ -89,7 +108,7 @@ export function runMapScene(panel: HTMLElement, bridge: boolean): Promise<MapPic
     box.addEventListener("pointerover", (e) => {
       const g = (e.target as Element).closest?.<SVGGElement>(".map-go.lamp");
       const part = g && LANTERN_ROW.find((l) => l.id === g.dataset.part);
-      if (part) note.textContent = `Play: ${part.name}`;
+      if (part && again.hidden) note.textContent = `${isPlayed(part, played) ? "Play again" : "Play"}: ${part.name}`;
     });
     close.addEventListener("click", () => finish(null));
     close.focus();

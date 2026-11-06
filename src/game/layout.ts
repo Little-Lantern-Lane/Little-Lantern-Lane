@@ -126,15 +126,15 @@ export const ZONES: Record<string, { x0: number; x1: number; label: string; auto
 };
 
 /** Every part of the story, as lanterns on the map. All of them are always open. */
-export const LANTERN_ROW: { id: string; name: string; plate: string; knot?: string; variant?: "promise" }[] = [
-  { id: "lantern_1", name: "Lantern Night", plate: "1" },
-  { id: "lantern_1b", name: "The borrowed lantern", plate: "1b", variant: "promise" },
-  { id: "lantern_2", name: "The morning after", plate: "2", knot: "start_day_two" },
-  { id: "lantern_3", name: "The storm", plate: "3", knot: "start_storm" },
-  { id: "lantern_far", name: "The far bank", plate: "Far", knot: "start_woods" },
-  { id: "lantern_4", name: "Opening day", plate: "4", knot: "start_mill" },
-  { id: "lantern_5", name: "The first snow", plate: "5", knot: "start_snow" },
-  { id: "lantern_6", name: "The tide", plate: "6", knot: "start_coast" },
+export const LANTERN_ROW: { id: string; name: string; plate: string; level: number; knot?: string; variant?: "promise" }[] = [
+  { id: "lantern_1", name: "Lantern Night", plate: "1", level: 1 },
+  { id: "lantern_1b", name: "The borrowed lantern", plate: "1b", level: 1, variant: "promise" },
+  { id: "lantern_2", name: "The morning after", plate: "2", level: 2, knot: "start_day_two" },
+  { id: "lantern_3", name: "The storm", plate: "3", level: 3, knot: "start_storm" },
+  { id: "lantern_far", name: "The far bank", plate: "Far", level: 7, knot: "start_woods" },
+  { id: "lantern_4", name: "Opening day", plate: "4", level: 4, knot: "start_mill" },
+  { id: "lantern_5", name: "The first snow", plate: "5", level: 5, knot: "start_snow" },
+  { id: "lantern_6", name: "The tide", plate: "6", level: 6, knot: "start_coast" },
 ];
 
 /** Things a `#use:` choice can name. */
@@ -267,6 +267,9 @@ export const NEXT_GIVER: Record<number, { who: string; line: string }> = {
   5: { who: "oda", line: "Oda's looking for you at the bakery." },
   6: { who: "tobin", line: "Tobin's looking for you in his shop on Market Street." },
 };
+
+/** The goal in the village once you've finished everything. */
+export const ALL_PLAYED = { who: "", line: "You've played every part. Wander, or play any of them again from the map (M)." };
 
 /** Paths to the woods from the two chapters that don't happen in the village. */
 

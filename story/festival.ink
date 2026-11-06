@@ -49,6 +49,7 @@ VAR next_chapter = 0      // which chapter a save point leads into
 // The week after the storm
 VAR nature_count = 0      // set by the TS layer: how much is on Juno's table
 VAR nature_new = false    // set by the TS layer: you've just brought something
+VAR next_level = 0        // set by the TS layer: the part of the story that's next (7 is the far bank)
 VAR next_giver = "mara"   // set by the TS layer: who starts the next part of the story
 VAR player_name = "Robin"  // what you chose to be called
 VAR woods_stage = 0       // 0 mending the bridge, 1 the far bank is open, 2 the lantern is hung
@@ -1865,8 +1866,15 @@ Tobin clears a corner of the bench. #scene: lanterns
     ->->
 
 === hub_mara ===
-{ next_giver == "mara":
+{
+- next_level == 7 && has_built("bridge_lantern"):
+    mara/warm: You hung it, {player_name}. I've been down to look twice, and I've stopped pretending it's to check the post. Come and see the week out?
+- next_level == 7 && has_built("bridge"):
+    mara/warm: The bridge held, {player_name}. I went down and checked. Twice. I'm so glad it's up. Tobin's still after that lantern for the far bank, if you're ready.
+- next_giver == "mara":
     mara/warm: There you are, {player_name}. I was hoping I'd see you. Have you got a minute?
+- has_built("bridge"):
+    mara/smile: I walked over the bridge this morning. No reason. I think that's what it's for.
 - else:
     mara/warm: I've made a list of things to do today. It's a short list. I'm trying that.
 }
