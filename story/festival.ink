@@ -1799,8 +1799,11 @@ You think about the house. #scene: homelook
 + {next_giver == "tobin"} ["I'm ready."]
     -> start_next -> menu
 // Reloading during the week lands you here with the bridge still up, so the lantern has to work from here too.
-+ {has_built("bridge") && not has_built("bridge_lantern") && bag_count("birch_bark") >= 2 && bag_count("glowcap") >= 1 && bag_count("skyglass") >= 1} ["I've got the bark, the glowcap and the skyglass."]
-    -> far_lantern_village ->->
++ {has_built("bridge") && not has_built("bridge_lantern")} ["I have the materials for the lantern."]
+    { lantern_ready():
+        -> far_lantern_village ->->
+    }
+    -> lantern_missing -> menu
 + {has_built("bridge") && not has_built("bridge_lantern")} ["What does the lantern need again?"]
     tobin: Two strips of birch bark for the shade. One glowcap. One piece of skyglass. All from the far bank if you like, though the birch grows on both.
     -> menu
@@ -2073,8 +2076,11 @@ You look through your bag for something. #scene: gift
     }
 }
 - (menu)
-+ {woods_stage == 0 && bag_count("driftwood") >= 6 && bag_count("ironstone") >= 2} ["I've got the driftwood and the ironstone."]
-    -> bridge_built ->->
++ {woods_stage == 0} ["I have the materials for the bridge."]
+    { bag_count("driftwood") >= 6 && bag_count("ironstone") >= 2:
+        -> bridge_built ->->
+    }
+    -> bridge_missing -> menu
 + {woods_stage == 0} ["What does the bridge need?"]
     mara: Six lengths of driftwood, from along the bank. Two lumps of ironstone for the pins.
     { not has_hammer:
@@ -2091,6 +2097,18 @@ You look through your bag for something. #scene: gift
     -> gift_to("mara") -> menu
 + [Leave her to it]
     ->->
+
+// You can always ask. Mara counts what you've brought and says what's still short.
+=== bridge_missing ===
+Mara counts it out on her fingers.
+{ bag_count("driftwood") < 6:
+    mara: Six lengths of driftwood. You've got {bag_count("driftwood")}. There's more along the near bank.
+}
+{ bag_count("ironstone") < 2:
+    mara: Two lumps of ironstone for the pins. You've got {bag_count("ironstone")}. It's the reddish rock, and you'll need a hammer.
+}
+mara/smile: Bring me that and we can start.
+->->
 
 === bridge_built ===
 You put it all down in a heap at the water's edge. #event: use_items bridge
@@ -2164,8 +2182,11 @@ Everyone drifts back up the lane for supper. #event: unplace tobin #event: unpla
     }
 }
 - (menu)
-+ {woods_stage == 1 && bag_count("birch_bark") >= 2 && bag_count("glowcap") >= 1 && bag_count("skyglass") >= 1} ["I've got the bark, the glowcap and the skyglass."]
-    -> far_lantern ->->
++ {woods_stage == 1} ["I have the materials for the lantern."]
+    { lantern_ready():
+        -> far_lantern ->->
+    }
+    -> lantern_missing -> menu
 + {woods_stage == 1} ["What does the lantern need again?"]
     tobin: Two strips of birch bark for the shade. One glowcap. One piece of skyglass. All from the far bank if you like, though the birch grows on both.
     -> menu
@@ -2183,6 +2204,24 @@ Everyone drifts back up the lane for supper. #event: unplace tobin #event: unpla
     -> gift_to("tobin") -> menu
 + [Let him get on]
     ->->
+
+=== function lantern_ready() ===
+~ return bag_count("birch_bark") >= 2 && bag_count("glowcap") >= 1 && bag_count("skyglass") >= 1
+
+// You can always ask. Tobin looks through what you've brought and says what's still short.
+=== lantern_missing ===
+Tobin looks through your bag with one gluey finger.
+{ bag_count("birch_bark") < 2:
+    tobin: I need two strips of birch bark for the shade. You've got {bag_count("birch_bark")}.
+}
+{ bag_count("glowcap") < 1:
+    tobin: There's no glowcap in here yet. They grow on the far bank.
+}
+{ bag_count("skyglass") < 1:
+    tobin: No skyglass yet. It's in the blue rocks on the far bank, and you'll need a hammer.
+}
+tobin/smile: Bring me that and I'll get started.
+->->
 
 === far_lantern ===
 Tobin takes it all to the bench and doesn't make a single joke for an hour. #event: use_items lantern

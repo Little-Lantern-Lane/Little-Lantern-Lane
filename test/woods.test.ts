@@ -251,15 +251,19 @@ describe("the far bank story", () => {
     expect(r.state.bag.tools.sort()).toEqual(["hammer", "rod"]);
   });
 
-  it("won't offer the bridge until you have what it takes", () => {
-    const r = play(["talk to mara"], {});
-    expect(r.engine.choices.some((c) => c.text.includes("I've got the driftwood"))).toBe(false);
+  it("Mara says what the bridge is still short of, and nothing is used up", () => {
+    const r = play(["talk to mara", "i have the materials"], { driftwood: 4, ironstone: 2 });
+    expect(r.text).toContain("You've got 4");
+    expect(r.text).not.toContain("Two lumps of ironstone for the pins. You've got");
+    expect(r.state.world.props).not.toContain("bridge");
+    expect(r.state.bag.items).toMatchObject({ driftwood: 4, ironstone: 2 });
+    expect(r.engine.choices.some((c) => c.text.includes("I have the materials for the bridge"))).toBe(true);
   });
 
   it("goes from the bridge to the lantern to home, and on to opening day", () => {
     const r = play([
-      "talk to mara", "i've got the driftwood",
-      "talk to tobin", "i've got the bark", "the river",
+      "talk to mara", "i have the materials",
+      "talk to tobin", "i have the materials", "the river",
       "walk home",
     ], FULL);
     expect(r.state.world.props).toEqual(expect.arrayContaining(["bridge", "bridge_lantern"]));
@@ -271,7 +275,7 @@ describe("the far bank story", () => {
 
   it("every answer to Nell's question is met warmly, and none of them changes anything", () => {
     for (const a of ["the river", "finding things", "people", "i don't know"]) {
-      const r = play(["talk to mara", "i've got the driftwood", "talk to tobin", "i've got the bark", a], FULL);
+      const r = play(["talk to mara", "i have the materials", "talk to tobin", "i have the materials", a], FULL);
       expect(r.state.world.props).toContain("bridge_lantern");
       expect(r.engine.getVar("woods_stage")).toBe(2);
     }
@@ -317,15 +321,15 @@ describe("the far bank lantern from the village", () => {
     };
     run();
     pick("talk to tobin");
-    return { engine, pick, state: () => state };
+    return { engine, pick, state: () => state, setBag: (b: BagState) => (state = { ...state, bag: { ...b, built: state.bag.built } }) };
   }
 
-  const offers = (r: ReturnType<typeof tobinInVillage>) => r.engine.choices.some((c) => c.text.includes("I've got the bark"));
+  const offers = (r: ReturnType<typeof tobinInVillage>) => r.engine.choices.some((c) => c.text.includes("I have the materials"));
 
   it("Tobin makes it once you bring the materials, and the village carries on after", () => {
     const r = tobinInVillage(["bridge"], MATERIALS);
     expect(offers(r)).toBe(true);
-    r.pick("i've got the bark");
+    r.pick("i have the materials");
     const end = r.pick("the river");
     expect(r.state().world.props).toContain("bridge_lantern");
     expect(r.state().bag.built).toContain("bridge_lantern");
@@ -337,10 +341,31 @@ describe("the far bank lantern from the village", () => {
     expect(r.engine.choices.some((c) => c.text.includes("Talk to Tobin"))).toBe(true);
   });
 
-  it("isn't offered before the bridge, without everything, or twice", () => {
+  it("can always be asked once the bridge is up, and not before it or after the lantern", () => {
     expect(offers(tobinInVillage([], MATERIALS))).toBe(false);
-    expect(offers(tobinInVillage(["bridge"], { ...MATERIALS, skyglass: 0 }))).toBe(false);
+    expect(offers(tobinInVillage(["bridge"], {}))).toBe(true);
     expect(offers(tobinInVillage(["bridge", "bridge_lantern"], MATERIALS))).toBe(false);
+  });
+
+  it("if something's short, Tobin says exactly what, and nothing is used up", () => {
+    const r = tobinInVillage(["bridge"], { birch_bark: 1, glowcap: 1 });
+    const said = r.pick("i have the materials");
+    expect(said).toContain("You've got 1");
+    expect(said).toContain("skyglass");
+    expect(said).not.toContain("glowcap");
+    expect(r.state().bag.items).toMatchObject({ birch_bark: 1, glowcap: 1 });
+    expect(r.state().world.props).not.toContain("bridge_lantern");
+    // Still in the conversation, and it can be asked again.
+    expect(offers(r)).toBe(true);
+  });
+
+  it("sees what you gather after the conversation has started", () => {
+    const r = tobinInVillage(["bridge"], {});
+    r.pick("i have the materials");
+    r.setBag(withItems(MATERIALS));
+    r.pick("i have the materials");
+    r.pick("the river");
+    expect(r.state().world.props).toContain("bridge_lantern");
   });
 
   it("Tobin can say what it needs until it's made", () => {
@@ -348,6 +373,27 @@ describe("the far bank lantern from the village", () => {
     expect(asks(["bridge"])).toBe(true);
     expect(asks([])).toBe(false);
     expect(asks(["bridge", "bridge_lantern"])).toBe(false);
+  });
+});
+
+describe("asking Tobin during the week", () => {
+  const json = new Compiler(readFileSync("story/festival.ink", "utf8")).Compile().ToJson()!;
+
+  it("the question is there with the bridge up, whatever is in your bag, and says what's missing", () => {
+    const state: GameState = { ...initialState(), bag: { ...withItems({ birch_bark: 2, skyglass: 1 }), built: ["bridge"] } };
+    const engine = new Engine(json, "main", () => 0, () => state.bag);
+    engine.startAt("start_woods");
+    const read = () => [...engine.lines()].map((l) => l.text).join("\n");
+    const pick = (want: string) => {
+      engine.choose(engine.choices.find((c) => c.text.toLowerCase().includes(want))!.index);
+      return read();
+    };
+    read();
+    pick("talk to tobin");
+    const said = pick("i have the materials");
+    expect(said).toContain("glowcap");
+    expect(said).not.toContain("birch bark");
+    expect(said).not.toContain("skyglass");
   });
 });
 
@@ -382,11 +428,11 @@ describe("playing the far bank again", () => {
     const r = replay(["talk to mara"]);
     expect(r.text).toContain("Six good lengths");
     expect(r.state().world.props).not.toContain("bridge");
-    expect(r.engine.choices.some((c) => c.text.includes("I've got the driftwood"))).toBe(true);
+    expect(r.engine.choices.some((c) => c.text.includes("I have the materials for the bridge"))).toBe(true);
   });
 
   it("plays the bridge and the lantern again, and what you'd built is still on record", () => {
-    const r = replay(["talk to mara", "i've got the driftwood", "talk to tobin", "i've got the bark", "the river"]);
+    const r = replay(["talk to mara", "i have the materials", "talk to tobin", "i have the materials", "the river"]);
     expect(r.state().world.props).toEqual(expect.arrayContaining(["bridge", "bridge_lantern"]));
     expect(r.state().bag.built).toEqual(["bridge", "bridge_lantern"]);
   });
