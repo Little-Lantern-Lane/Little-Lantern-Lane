@@ -44,3 +44,11 @@ export function atSavePoint(p: Progress, done: number, next: number) {
   const progress = finishLevel(p, done);
   return { progress, firstTime, onPath: wasNext && nextLevel(progress) === next };
 }
+
+/**
+ * Playing the far bank again after finishing it starts over, with the river as it was. What you
+ * built isn't touched: the run just doesn't look at it, so leaving partway loses nothing.
+ */
+export function startsWithoutBuilt(p: Progress, knot: string | undefined): boolean {
+  return knot === "start_woods" && hasFinished(p, 7);
+}

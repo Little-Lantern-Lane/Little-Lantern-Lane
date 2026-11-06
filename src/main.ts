@@ -22,7 +22,7 @@ import { factCard, runBreathScene, runChainScene, runCheckInScene, runFitScene, 
 import { CHAPTER_NAMES, clearSave, readBag, readLooks, readProgress, readSave, readTips, writeBag, writeLooks, writeProgress, writeSave, writeTips, type Looks, type SaveChapter, type SaveGame } from "./save";
 import { ADDITIONS, buildAddition, DEFAULT_CHARACTER, DEFAULT_HOME, freeAdditionDue, growRoom, hasAddition, type Addition, type Decor } from "./logic/appearance";
 import { DEFAULT_NAME } from "./logic/appearance";
-import { atSavePoint, finishLevel, hasFinished, nextLevel, type Progress } from "./logic/progress";
+import { atSavePoint, finishLevel, hasFinished, nextLevel, startsWithoutBuilt, type Progress } from "./logic/progress";
 import { addPiece, canPlace, FURNITURE, place, putAway, turnPiece, type Furnishings, type FurnitureId } from "./logic/furniture";
 import { makeLantern, swapShelf, toTable, buyItem, canAfford, canGift, countOf, craft, gather, give, ITEMS, makeTool, pay, sell, spendItems, type BagState, type Buyer, type Friend, type ItemId } from "./logic/bag";
 import { COIN, itemIcon } from "./ui/items";
@@ -469,7 +469,8 @@ async function play(chosen: Variant, from?: string, resume?: SaveGame) {
   state = resume?.game ?? initialState();
   // Your bag is yours, whichever game you're in, and so is what you've built with it.
   const bag = readBag();
-  state = { ...state, bag, world: { ...state.world, props: [...new Set([...state.world.props, ...bag.built])] } };
+  const overAgain = !resume && startsWithoutBuilt(progress, from);
+  state = { ...state, bag, world: { ...state.world, props: [...new Set([...state.world.props, ...(overAgain ? [] : bag.built)])] } };
   const inVillage = from === "village_hub";
   if (inVillage) {
     state = applyEvent(state, { name: "chapter", arg: "8" });
@@ -478,7 +479,7 @@ async function play(chosen: Variant, from?: string, resume?: SaveGame) {
   }
   meter.render(state.meter);
   showChapter(state.world.level);
-  const engine = new Engine(await storyJson, variant, () => state.meter.distress, () => state.bag);
+  const engine = new Engine(await storyJson, variant, () => state.meter.distress, () => (overAgain ? { ...state.bag, built: [] } : state.bag));
   if (resume) engine.loadState(resume.story);
   else if (from) engine.startAt(from);
   engine.setVar("player_name", yourName());

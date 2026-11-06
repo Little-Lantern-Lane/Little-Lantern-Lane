@@ -219,6 +219,16 @@ door, curtains). An upper floor adds stairs and a garden adds flowers to the vie
 outside. The window shows the lane's time and weather, and the stove is lit except before the story lights it in
 chapter five.
 
+## What the game remembers (2026-11-05)
+- **Finished parts:** kept in their own list (`lantern-night:progress`, `src/logic/progress.ts`). The
+  village reads this to know who sends you on next, so it survives the ending and a replay.
+- **Playing a part again:** the map ticks finished parts and asks first. A replay starts the part
+  over, doesn't move your place in the story, and ends back in the village. Replays use real
+  materials from your bag.
+- **The bridge:** once built it stays built. Only replaying a finished far bank shows the river as
+  it was: that run ignores what's built without changing the record, so leaving partway loses
+  nothing. If the bridge is up but the week isn't finished, the lantern story carries on.
+
 ## Open decisions
 - Audience: clinical adjunct (with therapist) vs. general wellness product.
   Affects evidence needs, content review, crisis handling, business model.

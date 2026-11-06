@@ -95,7 +95,8 @@ export function runMapScene(panel: HTMLElement, bridge: boolean, played: number[
       if (!part) return;
       const pick: MapPick = { kind: "part", knot: part.knot, variant: part.variant };
       if (!isPlayed(part, played)) return finish(pick);
-      note.textContent = `You've played ${part.name}. Playing it again starts it over; your place in the story and everything you've built stay as they are.`;
+      const river = part.knot === "start_woods" ? " The bridge comes down for the replay, and it's back when you return." : "";
+      note.textContent = `You've played ${part.name}. Playing it again starts it over; your place in the story and everything you've built stay as they are.${river}`;
       again.textContent = "Play it again";
       again.hidden = false;
       again.onclick = () => finish(pick);

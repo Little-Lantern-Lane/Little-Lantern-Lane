@@ -7,6 +7,7 @@ import { Engine } from "../src/engine";
 import { applyBagEvent, BRIDGE_NEEDS, canAfford, canGift, CLOTHES, countOf, craft, DECOR_SHOP, FAVOURITES, fishFor, FRIENDS, gather, GIFT_GAP, giftFit, give, initialBag, ITEM_IDS, ITEMS, LANTERN_NEEDS, makeTool, normalizeBag, pay, RECIPES, sell, sellable, TOOLS, type BagState, type ItemId } from "../src/logic/bag";
 import { BOUGHT_CLOTHES, DECOR } from "../src/logic/appearance";
 import { applyEvent, initialState, type GameState } from "../src/logic/state";
+import { startsWithoutBuilt } from "../src/logic/progress";
 import { applyWorldEvent, type WorldState } from "../src/logic/world";
 import { bankAt, canVisitWoods, DOORS, FISHING_SPOTS, NODES, NPC_SPOTS, regionAt, riverMidX, WOODS, woodsAreaAt, woodsLimit } from "../src/game/layout";
 
@@ -347,6 +348,54 @@ describe("the far bank lantern from the village", () => {
     expect(asks(["bridge"])).toBe(true);
     expect(asks([])).toBe(false);
     expect(asks(["bridge", "bridge_lantern"])).toBe(false);
+  });
+});
+
+describe("playing the far bank again", () => {
+  const json = new Compiler(readFileSync("story/festival.ink", "utf8")).Compile().ToJson()!;
+  const FULL = { driftwood: 6, ironstone: 2, birch_bark: 2, glowcap: 1, skyglass: 1 };
+
+  /** The same run main.ts makes: the story sees nothing built, the real bag keeps its record. */
+  function replay(picks: string[]) {
+    let state: GameState = { ...initialState(), bag: { ...withItems(FULL), built: ["bridge", "bridge_lantern"] } };
+    const engine = new Engine(json, "main", () => 0, () => ({ ...state.bag, built: [] }));
+    engine.startAt("start_woods");
+    const read = () => {
+      const lines: string[] = [];
+      for (const line of engine.lines()) {
+        for (const ev of line.events) state = applyEvent(state, ev);
+        lines.push(line.text);
+      }
+      return lines.join("\n");
+    };
+    let text = read();
+    for (const want of picks) {
+      const c = engine.choices.find((x) => x.text.toLowerCase().includes(want));
+      if (!c) throw new Error(`No choice "${want}" in: ${engine.choices.map((x) => x.text).join(" | ")}`);
+      engine.choose(c.index);
+      text += read();
+    }
+    return { engine, text, state: () => state };
+  }
+
+  it("starts over: the river is as it was and Mara asks for the bridge", () => {
+    const r = replay(["talk to mara"]);
+    expect(r.text).toContain("Six good lengths");
+    expect(r.state().world.props).not.toContain("bridge");
+    expect(r.engine.choices.some((c) => c.text.includes("I've got the driftwood"))).toBe(true);
+  });
+
+  it("plays the bridge and the lantern again, and what you'd built is still on record", () => {
+    const r = replay(["talk to mara", "i've got the driftwood", "talk to tobin", "i've got the bark", "the river"]);
+    expect(r.state().world.props).toEqual(expect.arrayContaining(["bridge", "bridge_lantern"]));
+    expect(r.state().bag.built).toEqual(["bridge", "bridge_lantern"]);
+  });
+
+  it("only happens once you've finished the week, so a week in progress carries on", () => {
+    expect(startsWithoutBuilt({ finished: [1, 2, 3, 7] }, "start_woods")).toBe(true);
+    expect(startsWithoutBuilt({ finished: [1, 2, 3] }, "start_woods")).toBe(false);
+    expect(startsWithoutBuilt({ finished: [1, 2, 3, 7] }, "start_mill")).toBe(false);
+    expect(startsWithoutBuilt({ finished: [1, 2, 3, 7] }, undefined)).toBe(false);
   });
 });
 
