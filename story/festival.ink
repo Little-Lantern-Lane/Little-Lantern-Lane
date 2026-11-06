@@ -52,6 +52,7 @@ VAR nature_new = false    // set by the TS layer: you've just brought something
 VAR next_giver = "mara"   // set by the TS layer: who starts the next part of the story
 VAR player_name = "Robin"  // what you chose to be called
 VAR woods_stage = 0       // 0 mending the bridge, 1 the far bank is open, 2 the lantern is hung
+VAR lantern_in_village = false  // the far bank lantern was made from the village, not during the week
 VAR has_rod = false
 VAR has_hammer = false
 VAR trade_with = ""       // who a selling, gift or shop panel is for
@@ -1796,6 +1797,12 @@ You think about the house. #scene: homelook
 - (menu)
 + {next_giver == "tobin"} ["I'm ready."]
     -> start_next -> menu
+// Reloading during the week lands you here with the bridge still up, so the lantern has to work from here too.
++ {has_built("bridge") && not has_built("bridge_lantern") && bag_count("birch_bark") >= 2 && bag_count("glowcap") >= 1 && bag_count("skyglass") >= 1} ["I've got the bark, the glowcap and the skyglass."]
+    -> far_lantern_village ->->
++ {has_built("bridge") && not has_built("bridge_lantern")} ["What does the lantern need again?"]
+    tobin: Two strips of birch bark for the shade. One glowcap. One piece of skyglass. All from the far bank if you like, though the birch grows on both.
+    -> menu
 + [Sell him stones or shells]
     -> sell_to("tobin") -> menu
 + ["Could you make something for my house?"]
@@ -2194,7 +2201,16 @@ nell/warm: So. You've had a week. What was in it?
 * ["I don't know yet."]
     nell/warm: That's all right. You had it whether you know or not.
 - It's not a big thing, a week like this. You'd forgotten you could have one. #event: woods_goal 2 #event: unplace mara #event: unplace nell #event: unplace ash #event: unplace tobin #event: unplace wren #event: unplace oda #event: unplace pip #event: unplace juno
-Ash opens in the morning. For now, you can stay as long as you like.
+{ not lantern_in_village:
+    Ash opens in the morning. For now, you can stay as long as you like.
+}
+->->
+
+// The same evening from the village, which then goes back to being an ordinary afternoon.
+=== far_lantern_village ===
+~ lantern_in_village = true
+-> far_lantern ->
+It's still lit when you walk back up through the wood the next day. #event: afternoon
 ->->
 
 === talk_ash_woods ===

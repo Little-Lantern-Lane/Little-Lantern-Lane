@@ -291,6 +291,65 @@ describe("the far bank story", () => {
   });
 });
 
+describe("the far bank lantern from the village", () => {
+  const json = new Compiler(readFileSync("story/festival.ink", "utf8")).Compile().ToJson()!;
+  const MATERIALS = { birch_bark: 2, glowcap: 1, skyglass: 1 };
+
+  /** Reloading drops you in the village with the bridge still built, so that's where Tobin is. */
+  function tobinInVillage(built: string[], items: Partial<Record<ItemId, number>>) {
+    let state: GameState = { ...initialState(), bag: { ...withItems(items), built } };
+    const engine = new Engine(json, "main", () => state.meter.distress, () => state.bag);
+    engine.startAt("village_hub");
+    const run = () => {
+      const lines: string[] = [];
+      for (const line of engine.lines()) {
+        for (const ev of line.events) state = applyEvent(state, ev);
+        lines.push(line.text);
+      }
+      return lines.join("\n");
+    };
+    const pick = (want: string) => {
+      const c = engine.choices.find((x) => x.text.toLowerCase().includes(want));
+      if (!c) throw new Error(`No choice "${want}" in: ${engine.choices.map((x) => x.text).join(" | ")}`);
+      engine.choose(c.index);
+      return run();
+    };
+    run();
+    pick("talk to tobin");
+    return { engine, pick, state: () => state };
+  }
+
+  const offers = (r: ReturnType<typeof tobinInVillage>) => r.engine.choices.some((c) => c.text.includes("I've got the bark"));
+
+  it("Tobin makes it once you bring the materials, and the village carries on after", () => {
+    const r = tobinInVillage(["bridge"], MATERIALS);
+    expect(offers(r)).toBe(true);
+    r.pick("i've got the bark");
+    const end = r.pick("the river");
+    expect(r.state().world.props).toContain("bridge_lantern");
+    expect(r.state().bag.built).toContain("bridge_lantern");
+    expect(r.state().bag.items).toMatchObject({ birch_bark: 0, glowcap: 0, skyglass: 0 });
+    // The evening is over and nobody is left standing at the bridge.
+    expect(r.state().world.time).not.toBe("sunset");
+    expect(r.state().world.placed.tobin).toBeUndefined();
+    expect(end).not.toContain("Ash opens in the morning");
+    expect(r.engine.choices.some((c) => c.text.includes("Talk to Tobin"))).toBe(true);
+  });
+
+  it("isn't offered before the bridge, without everything, or twice", () => {
+    expect(offers(tobinInVillage([], MATERIALS))).toBe(false);
+    expect(offers(tobinInVillage(["bridge"], { ...MATERIALS, skyglass: 0 }))).toBe(false);
+    expect(offers(tobinInVillage(["bridge", "bridge_lantern"], MATERIALS))).toBe(false);
+  });
+
+  it("Tobin can say what it needs until it's made", () => {
+    const asks = (built: string[]) => tobinInVillage(built, {}).engine.choices.some((c) => c.text.includes("What does the lantern need"));
+    expect(asks(["bridge"])).toBe(true);
+    expect(asks([])).toBe(false);
+    expect(asks(["bridge", "bridge_lantern"])).toBe(false);
+  });
+});
+
 describe("a bridge you've built", () => {
   it("is still there when you play the week again, and nothing asks you to build it twice", async () => {
     const { Engine } = await import("../src/engine");

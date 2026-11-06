@@ -386,7 +386,8 @@ function apply(ev: GameEvent) {
   world?.setFeeling(state.meter.distress);
   meter.render(state.meter);
   if (ev.name === "chapter") showChapter(state.world.level);
-  if (ev.name === "woods_goal") hud.setGoal(WOODS_GOALS[Number(ev.arg)] ?? "");
+  // In the village the goal stays on who to see next, even if the lantern gets made from there.
+  if (ev.name === "woods_goal" && state.world.level !== 8) hud.setGoal(WOODS_GOALS[Number(ev.arg)] ?? "");
   if (ev.name === "story_goal") hud.setGoal(STORY_GOALS[ev.arg ?? ""] ?? "");
   paintBag();
   const sfx = EVENT_SFX[ev.name];
