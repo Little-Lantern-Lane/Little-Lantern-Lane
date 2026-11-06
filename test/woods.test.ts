@@ -295,7 +295,8 @@ describe("a bridge you've built", () => {
   it("is still there when you play the week again, and nothing asks you to build it twice", async () => {
     const { Engine } = await import("../src/engine");
     const { initialBag } = await import("../src/logic/bag");
-    const json = (await import("node:fs")).readFileSync("public/festival.json", "utf8").replace(/^﻿/, "");
+    const { Compiler } = await import("inkjs/full");
+    const json = new Compiler((await import("node:fs")).readFileSync("story/festival.ink", "utf8")).Compile().ToJson()!;
     const bag = { ...initialBag(), built: ["bridge"], items: { driftwood: 9, ironstone: 9 } };
     const e = new Engine(json, "main", () => 0, () => bag);
     e.startAt("start_woods");
