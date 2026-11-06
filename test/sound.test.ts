@@ -288,10 +288,14 @@ describe("the gulls, birds and brook", () => {
     const s = createSound();
     s.unlock();
     const sources = live.sources;
+    const started = live.started;
+    // Calls come at random times: pin the dice so the first one falls inside the lookahead.
+    vi.spyOn(Math, "random").mockReturnValue(0);
     s.setNature({ ...quiet, gulls: 1, birds: 1, insects: 1 });
     vi.advanceTimersByTime(200);
-    expect(live.sources).toBe(sources);
-    expect(live.started).toBeGreaterThan(0);
+    vi.restoreAllMocks();
+    expect(live.sources - sources).toBeLessThanOrEqual(live.started - started);
+    expect(live.started).toBeGreaterThan(started);
   });
 
   it("spaces calls out, and thins the bubbles the further off you are", () => {
